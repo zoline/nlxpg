@@ -28,6 +28,7 @@ class Word:
     description: str
     is_format: bool
     domain_class: str  # 형식단어일 때만
+    local: bool = False  # 기관 추가 단어 (ADR-0009)
 
 
 @dataclass(frozen=True)
@@ -53,6 +54,7 @@ class Term:
     domain: str
     allowed: str
     storage_format: str
+    local: bool = False  # 기관 추가 용어 (ADR-0009)
 
 
 @dataclass
@@ -70,6 +72,12 @@ class Standards:
     default_domain: dict[str, str] = field(default_factory=dict)
     #: 도메인명 → 그 도메인을 쓰는 (유효) 표준용어 수
     domain_term_count: dict[str, int] = field(default_factory=dict)
+    #: 기관이 추가한 이음동의어 (ADR-0009, standards/local.py)
+    local_aliases: set[str] = field(default_factory=set)
+    #: 덧붙인 기관 항목 수 (0이면 공통표준만)
+    local_items: int = 0
+    #: 덧붙인 기관 항목 (실행 설정에 그대로 남긴다)
+    local_snapshot: list[dict] = field(default_factory=list)
 
     def domains_in_class(self, klass: str) -> list[Domain]:
         return [d for d in self.domains.values() if d.klass == klass]

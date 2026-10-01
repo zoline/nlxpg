@@ -77,6 +77,9 @@ def test_design_with_standards(std, order_ir):
     assert cnpt.attribute("cnpt_nm").data_type == "varchar(100)"
     assert ordr.attribute("ordr_ymd").data_type == "date"
     assert ordr.attribute("cnpt_id").data_type == "bigint"  # FK는 부모 대리키를 따른다
+    # LLM이 낸 물리명을 표준으로 바꾼 근거가 남는다
+    assert "LLM 제안 'Customer' → 표준 'cnpt'" in cnpt.standard_notes
+    assert "LLM 제안 'customerName' → 표준 'cnpt_nm'" in cnpt.attribute("cnpt_nm").standard_notes
     ddl = to_ddl(ir)
     assert "REFERENCES cnpt (cnpt_id)" in ddl
     assert not [i for i in lint_schema(ir) if i.level == "error"]

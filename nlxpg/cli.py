@@ -425,10 +425,35 @@ def db_bootstrap(
         typer.secho(f"  {line}", fg="green")
 
 
-def _load_standards(s):  # type: ignore[no-untyped-def]
+async def _standards_async(s, *, always: bool = False):  # type: ignore[no-untyped-def]
+    """공통표준(CSV) + 시스템 DB의 기관 추가 표준(ADR-0009). DB에 닿지 않으면 공통표준만 쓴다."""
     from nlxpg.standards import load_standards
+    from nlxpg.standards.local import LocalStore, apply_local
 
-    return load_standards(s.standards_dir, s.standards_version) if s.apply_standards else None
+    if not (always or s.apply_standards):
+        return None
+    std = load_standards(s.standards_dir, s.standards_version)
+    if not s.system_pg_dsn:
+        return std
+    try:
+        from nlxpg.store import RunStore
+
+        store = await RunStore.connect(s.system_pg_dsn)
+        try:
+            items = await LocalStore(store.pool).list()
+        finally:
+            await store.close()
+    except Exception as exc:  # noqa: BLE001 — 기관 표준 없이라도 진행한다
+        typer.secho(f"기관 추가 표준을 읽지 못해 공통표준만 쓴다: {type(exc).__name__}: {exc}", fg="yellow", err=True)
+        return std
+    applied = apply_local(std, items)
+    for item, why in applied.rejected:
+        typer.secho(f"기관 표준 적용 안 됨: {item.name} — {why}", fg="yellow", err=True)
+    return applied.standards
+
+
+def _load_standards(s, *, always: bool = False):  # type: ignore[no-untyped-def]
+    return asyncio.run(_standards_async(s, always=always))
 
 
 @std_app.command("lookup")
@@ -438,14 +463,14 @@ def standards_lookup(
     hint: Annotated[str, typer.Option(help="타입 힌트 (예: varchar(50))")] = "",
 ) -> None:
     """이름을 공통표준에 비추어 물리명·도메인·타입을 보여준다."""
-    from nlxpg.standards import load_standards, resolve_attribute, resolve_entity
+    from nlxpg.standards import resolve_attribute, resolve_entity
 
     s = load_settings()
-    std = load_standards(s.standards_dir, s.standards_version)
-    typer.echo(f"공통표준 {std.version}판")
+    std = _load_standards(s, always=True)
+    typer.echo(f"공통표준 {std.version}판" + (f" + 기관 추가 {std.local_items}건" if std.local_items else ""))
     for name in names:
         r = resolve_entity(std, name) if entity else resolve_attribute(std, name, type_hint=hint)
-        color = {"common": "green", "composed": "yellow"}.get(r.status, "red")
+        color = {"common": "green", "composed": "yellow", "local": "cyan"}.get(r.status, "red")
         typer.secho(
             f"  {name} → [{r.status}] {r.logical_name} {r.physical_name or '-'} "
             f"{r.domain or ''} {r.data_type or ''}".rstrip(), fg=color,
@@ -467,13 +492,12 @@ def standards_check(
     """기존 스키마의 공통표준 준수를 컬럼 단위로 판정한다 (매뉴얼 [표 Ⅲ-2] 형식)."""
     import csv
 
-    from nlxpg.standards import load_standards
     from nlxpg.standards.check import MAPPING_HEADER, VERDICT_LABEL, check_columns, mapping_rows
 
     if sum(x is not None for x in (ddl, dsn, run)) != 1:
         raise typer.BadParameter("--ddl, --dsn, --run 중 하나만 지정한다")
     s = load_settings()
-    std = load_standards(s.standards_dir, s.standards_version)
+    std = _load_standards(s, always=True)
     columns = asyncio.run(_check_inputs(s, ddl, dsn, schema, run))
     report = check_columns(std, columns)
 
@@ -594,7 +618,7 @@ async def _design(
         typer.secho("--debug는 시스템 DB에 기록한다 — --no-store이거나 DB가 없어 기록하지 않는다", fg="yellow")
     run_id = None
     try:
-        service = RunService(s, _load_standards(s), store, llm_settings)
+        service = RunService(s, await _standards_async(s), store, llm_settings)
         run_id = await service.start(docs, label=label, internal=internal,
                                      extra_config={"debug": debug} if debug else None)
         result = await service.execute(run_id, docs, sandbox=sandbox, debug=debug)

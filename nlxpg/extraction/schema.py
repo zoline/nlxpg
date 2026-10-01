@@ -10,19 +10,31 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
+
+
+def _all_required(schema: dict) -> None:
+    """JSON Schema에서 모든 속성을 required로 표시한다. 기본값이 있는 필드는 required에 들어가지 않아,
+    guided decoding이 그 필드를 통째로 빠뜨리게 둔다(2026-10-01 실측: Qwen3가 value_examples·data_type_hint를
+    한 번도 내지 않음). 스키마에서만 필수로 하고 pydantic 검증은 기본값을 허용해, 빠져도 실패하지 않게 한다."""
+    schema["required"] = list(schema.get("properties", {}))
 
 
 class ExtractedAttribute(BaseModel):
+    model_config = ConfigDict(json_schema_extra=_all_required)
+
     logical_name: str = Field(description="문서에 나온 속성 이름(한글)")
     physical_name: str = Field(description="영문 snake_case 컬럼명 제안")
     description: str = Field("", description="문서에 근거한 한 문장 설명")
     data_type_hint: str = Field(
-        "", description="값 예시로 추정한 PostgreSQL 타입, 예: varchar(100), integer, date"
+        "", description="값 예시·형식 설명으로 추정한 PostgreSQL 타입(예: varchar(12), integer, "
+        "numeric(15), date). 근거가 없으면 빈 문자열"
     )
     required: bool = Field(False, description="문서가 필수라고 명시하면 true")
     identifier: bool = Field(False, description="엔티티를 식별하는 번호·코드이면 true")
-    value_examples: list[str] = Field(default_factory=list, description="문서에 나온 값 예시")
+    value_examples: list[str] = Field(
+        default_factory=list, description="문서에 나온 값 예시를 그대로(예: '2026-09-30', 'P0001'). 없으면 빈 목록"
+    )
     evidence: str = Field("", description="근거가 된 조항·표 이름 또는 짧은 인용")
 
 

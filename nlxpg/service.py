@@ -63,6 +63,9 @@ class RunService:
                 "chunk_max_chars": s.chunk_max_chars,
                 "guided_mode": guided_mode(self.llm_settings),
                 "standards_version": self.standards.version if self.standards else None,
+                # 그때 쓴 기관 추가 표준. 나중에 항목이 바뀌어도 이 실행의 기준을 알 수 있게(ADR-0009)
+                **({"local_standards": self.standards.local_snapshot}
+                   if self.standards and self.standards.local_snapshot else {}),
                 **(extra_config or {}),
             },
             created_by=created_by,

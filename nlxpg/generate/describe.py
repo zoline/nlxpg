@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from nlxpg.ir import SchemaIR
 
-_STATUS = {"common": "공통", "composed": "조합", "nonstandard": "비표준"}
+_STATUS = {"common": "공통", "composed": "조합", "local": "기관", "nonstandard": "비표준"}
 
 
 def _cell(s: str) -> str:

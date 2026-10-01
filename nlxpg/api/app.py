@@ -43,6 +43,18 @@ from nlxpg.service import RunService, delete_run
 from nlxpg.settings import PROJECT_ROOT, Settings, ensure_secret_key, load_settings, mask_dsn
 from nlxpg.standards import Standards, load_standards, resolve_attribute, resolve_entity
 from nlxpg.standards.check import VERDICT_LABEL, check_columns
+from nlxpg.standards.local import (
+    KIND_LABEL,
+    LocalConflict,
+    LocalItem,
+    LocalStore,
+    apply_local,
+    check_item,
+    dependents,
+    from_csv,
+    to_csv,
+)
+from nlxpg.standards.resolve import normalize_name
 from nlxpg.store import REVIEW_ITEMS, RunStore
 from nlxpg.validate.normalform import check_normal_forms
 
@@ -56,7 +68,13 @@ _SAFE_NAME = re.compile(r"[^0-9A-Za-z가-힣._-]+")
 class State:
     def __init__(self) -> None:
         self.settings: Settings = load_settings()
+        #: 공통표준(CSV) 위에 기관 추가 표준(DB)을 덧붙인 것. 설계·검증은 이것을 쓴다(ADR-0009)
         self.standards: Standards | None = None
+        #: 공통표준 원본(CSV만)
+        self.base_standards: Standards | None = None
+        self.local: LocalStore | None = None
+        self.local_applied: list[LocalItem] = []
+        self.local_rejected: list[tuple[LocalItem, str]] = []
         self.store: RunStore | None = None
         self.users: UserStore | None = None
         self.profiles: ProfileStore | None = None
@@ -74,7 +92,7 @@ async def lifespan(app: FastAPI):
     state.settings = load_settings()
     s = state.settings
     try:
-        state.standards = load_standards(s.standards_dir, s.standards_version)
+        state.base_standards = state.standards = load_standards(s.standards_dir, s.standards_version)
     except FileNotFoundError as exc:
         log.warning("공통표준 없음: %s", exc)
     if s.system_pg_dsn:
@@ -82,7 +100,9 @@ async def lifespan(app: FastAPI):
             state.store = await RunStore.connect(s.system_pg_dsn)
             state.users = UserStore(state.store.pool)
             state.profiles = ProfileStore(state.store.pool, ensure_secret_key(s))
+            state.local = LocalStore(state.store.pool)
             await _bootstrap_admin(state.users, s)
+            await _reload_local()
         except Exception as exc:  # noqa: BLE001 — 접속 실패는 화면에 503으로 알린다
             state.db_error = f"{type(exc).__name__}: {exc}"
             log.warning("시스템 DB 접속 실패: %s", state.db_error)
@@ -91,6 +111,17 @@ async def lifespan(app: FastAPI):
         t.cancel()
     if state.store:
         await state.store.close()
+
+
+async def _reload_local() -> None:
+    """공통표준 원본 위에 DB의 기관 추가 표준을 다시 덧붙인다(ADR-0009). 바꾼 즉시 부른다."""
+    if state.base_standards is None or state.local is None:
+        return
+    applied = apply_local(state.base_standards, await state.local.list())
+    state.standards, state.local_applied, state.local_rejected = (
+        applied.standards, applied.applied, applied.rejected)
+    for item, why in applied.rejected:
+        log.warning("기관 표준 적용 안 됨: %s '%s' — %s", item.kind, item.name, why)
 
 
 async def _bootstrap_admin(users: UserStore, s: Settings) -> None:
@@ -353,6 +384,7 @@ async def info(user: CurrentUser) -> dict[str, Any]:
         "llm_configured": "extract" in roles,
         "standards_version": std.version if std else None,
         "standards": {"words": len(std.words), "terms": len(std.terms), "domains": len(std.domains),
+                      "local_items": std.local_items, "local_rejected": len(state.local_rejected),
                       "dir": str(s.standards_dir)} if std else None,
         "apply_standards": s.apply_standards,
         "system_db": mask_dsn(s.system_pg_dsn),
@@ -737,6 +769,129 @@ async def standards_domain_terms(name: str, user: CurrentUser, limit: int = 50) 
         raise HTTPException(404, "도메인이 없다")
     items = sorted((t for t in std.terms.values() if t.domain == name), key=lambda t: t.name)
     return {"total": len(items), "items": [t.__dict__ for t in items[:limit]]}
+
+
+# ── 기관 추가 표준 (ADR-0009) ─────────────────────────
+
+
+class LocalIn(BaseModel):
+    kind: Literal["alias", "word", "term"]
+    name: str = Field(min_length=1, max_length=60)
+    abbr: str = ""
+    english: str = ""
+    description: str = ""
+    is_format: bool = False
+    domain_class: str = ""
+    target: str = ""
+    domain: str = ""
+
+
+def _local() -> LocalStore:
+    if state.local is None or state.base_standards is None:
+        raise HTTPException(503, "시스템 DB 또는 공통표준이 없다")
+    return state.local
+
+
+@app.get("/api/standards/local")
+async def local_list(user: CurrentUser) -> dict[str, Any]:
+    """기관 추가 표준 목록. 적용되지 못한 항목(공통표준 새 판과 충돌 등)은 이유와 함께 준다."""
+    rejected = {i.item_id: why for i, why in state.local_rejected}
+    applied = {i.item_id: i for i in state.local_applied}
+    rows = await _local().rows()
+    for r in rows:
+        r["rejected"] = rejected.get(r["item_id"])
+        if r["item_id"] in applied:  # 정규화된 값(용어 약어 자동 생성 등)
+            r["abbr"] = applied[r["item_id"]].abbr
+    base = state.base_standards
+    assert base is not None
+    return {
+        "items": rows, "kinds": KIND_LABEL, "version": base.version,
+        "domain_classes": sorted({d.klass for d in base.domains.values()}),
+        "domains": sorted(base.domains),
+    }
+
+
+def _checked(body: LocalIn, exclude: int | None = None) -> LocalItem:
+    """원본·다른 기관 항목과 겹치지 않는지 확인한다. exclude: 수정 중인 항목은 빼고 본다."""
+    base = state.base_standards
+    assert base is not None
+    others = [i for i in state.local_applied if i.item_id != exclude]
+    std = apply_local(base, others).standards if exclude is not None else state.standards
+    assert std is not None
+    try:
+        return check_item(std, LocalItem(**body.model_dump()), base)
+    except LocalConflict as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.post("/api/standards/local")
+async def local_add(body: LocalIn, admin: AdminUser) -> dict[str, Any]:
+    item = _checked(body)
+    try:
+        item_id = await _local().add(item, admin.user_id)
+    except asyncpg.UniqueViolationError as exc:
+        raise HTTPException(400, f"이미 있는 {KIND_LABEL[item.kind]}: {item.name}") from exc
+    await _reload_local()
+    log.info("기관 표준 추가: %s %s by %s", item.kind, item.name, admin.username)
+    return {"item_id": item_id, "abbr": item.abbr}
+
+
+@app.put("/api/standards/local/{item_id}")
+async def local_update(item_id: int, body: LocalIn, admin: AdminUser) -> dict[str, Any]:
+    old = next((i for i in await _local().list() if i.item_id == item_id), None)
+    if old is None:
+        raise HTTPException(404, "항목이 없다")
+    renamed = old.kind == "word" and (old.name != normalize_name(body.name) or old.abbr != body.abbr.strip().upper())
+    if renamed and (deps := dependents(state.local_applied, state.standards, old.name)):  # type: ignore[arg-type]
+        raise HTTPException(400, f"이 단어를 쓰는 항목이 있어 이름·약어를 바꿀 수 없다: {', '.join(deps)}")
+    item = _checked(body, exclude=item_id)
+    await _local().update(item_id, item)
+    await _reload_local()
+    return {"item_id": item_id, "abbr": item.abbr}
+
+
+@app.delete("/api/standards/local/{item_id}")
+async def local_delete(item_id: int, admin: AdminUser) -> dict[str, Any]:
+    old = next((i for i in await _local().list() if i.item_id == item_id), None)
+    if old is None:
+        raise HTTPException(404, "항목이 없다")
+    if old.kind == "word" and (deps := dependents(state.local_applied, state.standards, old.name)):  # type: ignore[arg-type]
+        raise HTTPException(400, f"이 단어를 쓰는 항목을 먼저 지운다: {', '.join(deps)}")
+    await _local().delete(item_id)
+    await _reload_local()
+    log.info("기관 표준 삭제: %s %s by %s", old.kind, old.name, admin.username)
+    return {"ok": True}
+
+
+@app.get("/api/standards/local.csv")
+async def local_export(user: CurrentUser) -> Response:
+    return Response(to_csv(await _local().list()), media_type="text/csv; charset=utf-8",
+                    headers={"Content-Disposition": "attachment; filename=nlxpg_local_standards.csv"})
+
+
+@app.post("/api/standards/local/import")
+async def local_import(file: Annotated[UploadFile, File()], admin: AdminUser) -> dict[str, Any]:
+    """CSV를 한 행씩 검증해 넣는다. 이미 같은 항목이 있으면 건너뛰고, 문제가 있는 행은 이유를 돌려준다."""
+    try:
+        items = from_csv((await file.read()).decode("utf-8-sig"))
+    except (LocalConflict, UnicodeDecodeError) as exc:
+        raise HTTPException(400, f"CSV를 읽을 수 없다: {exc}") from exc
+    existing = {(i.kind, normalize_name(i.name)) for i in await _local().list()}
+    added, skipped, errors = 0, 0, []
+    order = {"word": 0, "alias": 1, "term": 2}  # 단어를 먼저 넣어야 이음동의어·용어가 그 단어를 쓴다
+    for item in sorted(items, key=lambda i: order[i.kind]):
+        if (item.kind, normalize_name(item.name)) in existing:
+            skipped += 1
+            continue
+        try:
+            checked = _checked(LocalIn(**{k: v for k, v in item.__dict__.items() if k != "item_id"}))
+        except HTTPException as exc:
+            errors.append(f"{KIND_LABEL[item.kind]} '{item.name}': {exc.detail}")
+            continue
+        await _local().add(checked, admin.user_id)
+        await _reload_local()
+        added += 1
+    return {"added": added, "skipped": skipped, "errors": errors}
 
 
 class CheckIn(BaseModel):

@@ -64,3 +64,13 @@ async def test_pipeline_merges_sections(fake_llm):
     assert {a.physical_name for a in cust.attributes} == {"customer_id", "customer_name", "grade"}
     assert result.schema.relationships[0].from_entity == "customer"
     assert result.valid is None  # 샌드박스 미실행
+
+
+def test_extraction_schema_marks_examples_required_but_tolerates_missing():
+    """guided decoding이 값 예시·타입 힌트를 빠뜨리지 않게 스키마에서는 필수, 검증은 기본값 허용."""
+    from nlxpg.extraction.schema import ExtractedAttribute, ExtractionResult
+
+    req = ExtractionResult.model_json_schema()["$defs"]["ExtractedAttribute"]["required"]
+    assert {"value_examples", "data_type_hint", "evidence"} <= set(req)
+    a = ExtractedAttribute.model_validate({"logical_name": "주문일자", "physical_name": "order_date"})
+    assert a.value_examples == [] and a.data_type_hint == ""

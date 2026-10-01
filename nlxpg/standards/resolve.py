@@ -6,6 +6,8 @@
    `_`로 이어 새 용어를 만든다 → status "composed" (DB표준 후보)
 3. 분할되지 않으면 → status "nonstandard" (호출자가 원래 값을 유지)
 
+기관 추가 항목(ADR-0009: 기관 용어, 기관 단어, 기관 이음동의어)을 하나라도 쓰면 status "local"이다.
+
 물리명은 소문자로 쓴다. 날짜·일시 도메인은 PostgreSQL 네이티브 타입으로 바꾼다.
 """
 from __future__ import annotations
@@ -16,7 +18,7 @@ from typing import Literal
 
 from nlxpg.standards.loader import Domain, Standards
 
-Status = Literal["common", "composed", "nonstandard"]
+Status = Literal["common", "composed", "local", "nonstandard"]
 
 #: ADR-0005: 날짜·일시 도메인분류 → PostgreSQL 타입. 나머지 날짜류(연도, 연월 등)는 char 유지.
 _DATE_CLASSES = {"연월일": "date", "연월일시분초": "timestamp", "연월일시분": "timestamp"}
@@ -106,7 +108,9 @@ def _from_term(std: Standards, term_name: str, res: Resolution) -> Resolution | 
     if term is None:
         return None
     domain = std.domains.get(term.domain)
-    res.status = "common"
+    res.status = "local" if term.local else "common"
+    if term.local:
+        res.notes.append(f"기관 용어 '{term.name}'")
     res.logical_name = term.name
     res.physical_name = term.abbr.lower()
     res.domain = term.domain
@@ -129,18 +133,15 @@ def resolve_attribute(
         res.notes.append("표준단어로 분할되지 않음")
         return res
 
-    words = [std.word_alias[p] for p in pieces]
-    for p, w in zip(pieces, words, strict=True):
-        if p in std.forbidden:
-            res.notes.append(f"금칙어 '{p}' → '{w}'")
-        elif p != w:
-            res.notes.append(f"이음동의어 '{p}' → '{w}'")
+    words = _words(std, pieces, res)
     res.words = words
     representative = "".join(words)
     if representative != name and (hit := _from_term(std, representative, res)):
+        if _uses_local(std, pieces, words):
+            hit.status = "local"  # 공통표준 용어지만 기관 이음동의어로 찾았다(비행기번호 → 항공기번호)
         return hit
 
-    res.status = "composed"
+    res.status = "local" if _uses_local(std, pieces, words) else "composed"
     res.logical_name = representative
     res.physical_name = "_".join(std.words[w].abbr for w in words).lower()
     if len(res.physical_name) > TERM_ABBR_MAX:
@@ -157,6 +158,26 @@ def resolve_attribute(
     return res
 
 
+def _words(std: Standards, pieces: list[str], res: Resolution) -> list[str]:
+    """분할 조각 → 대표단어. 금칙어·이음동의어·기관 항목을 쓴 경우 메모를 남긴다."""
+    words = [std.word_alias[p] for p in pieces]
+    for p, w in zip(pieces, words, strict=True):
+        if p in std.forbidden:
+            res.notes.append(f"금칙어 '{p}' → '{w}'")
+        elif p in std.local_aliases:
+            res.notes.append(f"기관 이음동의어 '{p}' → '{w}'")
+        elif p != w:
+            res.notes.append(f"이음동의어 '{p}' → '{w}'")
+    for w in dict.fromkeys(words):
+        if std.words[w].local:
+            res.notes.append(f"기관 단어 '{w}'")
+    return words
+
+
+def _uses_local(std: Standards, pieces: list[str], words: list[str]) -> bool:
+    return any(p in std.local_aliases for p in pieces) or any(std.words[w].local for w in words)
+
+
 def resolve_entity(std: Standards, logical_name: str) -> Resolution:
     """테이블명. 공통표준에는 테이블 명명규칙이 없어(기관이 정함) 단어 조합만 쓴다.
     형식단어로 끝날 필요는 없다."""
@@ -166,8 +187,8 @@ def resolve_entity(std: Standards, logical_name: str) -> Resolution:
     if pieces is None:
         res.notes.append("표준단어로 분할되지 않음")
         return res
-    words = [std.word_alias[p] for p in pieces]
-    res.status = "composed"
+    words = _words(std, pieces, res)
+    res.status = "local" if _uses_local(std, pieces, words) else "composed"
     res.words = words
     res.logical_name = "".join(words)
     res.physical_name = "_".join(std.words[w].abbr for w in words).lower()

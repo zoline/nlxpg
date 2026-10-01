@@ -16,8 +16,9 @@ SCHEMA_VERSION = "0.2"  # 0.2: 공통표준 적용 결과 필드 (ADR-0005)
 
 Cardinality = Literal["1:1", "1:N", "N:1", "N:M"]
 #: 공통표준 적용 결과. common: 공통표준용어, composed: 표준단어 조합(DB표준 후보),
-#: nonstandard: 표준단어로 분할되지 않음, None: 표준을 적용하지 않음.
-StandardStatus = Literal["common", "composed", "nonstandard"]
+#: local: 기관 추가 표준을 써서 만든 이름(ADR-0009), nonstandard: 표준단어로 분할되지 않음,
+#: None: 표준을 적용하지 않음.
+StandardStatus = Literal["common", "composed", "local", "nonstandard"]
 
 
 class Evidence(BaseModel):

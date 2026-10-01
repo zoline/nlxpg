@@ -15,7 +15,7 @@ from __future__ import annotations
 import re
 from collections import Counter
 from dataclasses import asdict, dataclass, field
-from typing import Literal
+from typing import Any, Literal
 
 from nlxpg.standards.english import infer_words
 from nlxpg.standards.loader import Domain, Standards
@@ -26,12 +26,13 @@ Verdict = Literal[
     "type_mismatch",   # 영문명은 표준, 타입·길이가 다름
     "name_mismatch",   # 한글명으로 표준용어를 찾았으나 영문명이 다름 (매핑 필요)
     "composed",        # 표준용어는 없고 표준단어 조합으로 만들 수 있음 (DB표준 후보)
+    "local",           # 기관 추가 표준(ADR-0009)으로 영문명이 맞음
     "nonstandard",     # 표준단어로도 분할되지 않음
     "unknown",         # 한글명이 없고 영문명도 표준 약어가 아님
 ]
 VERDICT_LABEL = {
     "standard": "표준", "type_mismatch": "타입 불일치", "name_mismatch": "영문명 불일치",
-    "composed": "조합(DB표준 후보)", "nonstandard": "비표준", "unknown": "판정 불가",
+    "composed": "조합(DB표준 후보)", "local": "기관 표준", "nonstandard": "비표준", "unknown": "판정 불가",
 }
 
 
@@ -142,6 +143,9 @@ def check_columns(std: Standards, columns: list[ColumnInput]) -> CheckReport:
             if res.status == "common":
                 term = std.term(res.logical_name)
                 c.matched_by = "logical"
+            elif res.status == "local":
+                _local_verdict(c, res, physical, col.data_type)
+                c.matched_by = "logical"
             elif res.status == "composed":
                 c.verdict = "composed"
                 c.matched_by = "logical"
@@ -165,6 +169,8 @@ def check_columns(std: Standards, columns: list[ColumnInput]) -> CheckReport:
                 c.notes += res.notes
                 if res.status == "common":
                     term = std.term(res.logical_name)
+                elif res.status == "local":
+                    _local_verdict(c, res, physical, col.data_type)
                 elif res.status == "composed":
                     c.verdict = "composed"
                     c.std_term, c.std_physical, c.std_domain = res.logical_name, res.physical_name, res.domain
@@ -189,6 +195,13 @@ def check_columns(std: Standards, columns: list[ColumnInput]) -> CheckReport:
                     c.notes.append(note)
         out.append(c)
     return CheckReport(standards_version=std.version, columns=out)
+
+
+def _local_verdict(c: ColumnCheck, res: Any, physical: str, data_type: str) -> None:
+    """기관 표준으로 풀린 컬럼: 영문명이 같으면 '기관 표준', 다르면 '영문명 불일치'."""
+    c.std_term, c.std_physical, c.std_domain = res.logical_name, res.physical_name, res.domain
+    c.std_type = res.data_type
+    c.verdict = "local" if physical == res.physical_name else "name_mismatch"
 
 
 def logical_from_comment(comment: str | None) -> str | None:

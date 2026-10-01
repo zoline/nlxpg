@@ -12,6 +12,7 @@
 | [0006](0006-web-ui-accounts-and-access.md) | 웹 UI 계정은 nlxpg 전용, 관리자·사용자 2역할, 실행 이력은 본인 것만 | 채택 |
 | [0007](0007-llm-settings-in-db.md) | LLM 설정은 웹 UI에서 프로필로 등록해 시스템 DB에만 저장 | 채택 |
 | [0008](0008-external-llm-for-non-internal-documents.md) | 사내 문서가 아닌 실행에는 외부 LLM API(Claude)를 골라 쓸 수 있다 | 채택 |
+| [0009](0009-local-standard-additions.md) | 기관 추가 표준은 공통표준 원본과 분리해 시스템 DB에 두고, 원본 위에 덧붙인다 | 채택 |
 
 ## 결정 대기 중
 

@@ -38,6 +38,13 @@ def design_schema(ir: SchemaIR, *, standards: Standards | None = None) -> Schema
     return ir
 
 
+def _note_rename(notes: list[str], proposed: str | None, standard: str) -> None:
+    """LLM이 낸 물리명을 표준 물리명으로 바꿀 때 근거를 남긴다(화면에서 표준 판정에 마우스를 올리면 보인다).
+    대소문자만 다르면 남기지 않는다."""
+    if proposed and proposed.lower() != standard.lower():
+        notes.append(f"LLM 제안 '{proposed}' → 표준 '{standard}'")
+
+
 def _apply_standards(ir: SchemaIR, std: Standards) -> None:
     """논리명을 표준용어로 맞추고 물리명·도메인·타입을 정한다. 표준으로 풀리지 않는
     이름은 추출 단계의 값을 그대로 두고 nonstandard로 표시한다."""
@@ -52,6 +59,7 @@ def _apply_standards(ir: SchemaIR, std: Standards) -> None:
                 e.standard_notes.append(f"논리명 '{e.logical_name}' → '{res.logical_name}'")
                 e.aliases = list(dict.fromkeys([*e.aliases, e.logical_name]))
                 e.logical_name = res.logical_name
+            _note_rename(e.standard_notes, e.physical_name, res.physical_name)
             table_rename[e.physical_name] = res.physical_name
             e.physical_name = res.physical_name
 
@@ -66,6 +74,7 @@ def _apply_standards(ir: SchemaIR, std: Standards) -> None:
                 if res.logical_name != a.logical_name:
                     a.standard_notes.append(f"논리명 '{a.logical_name}' → '{res.logical_name}'")
                     a.logical_name = res.logical_name
+                _note_rename(a.standard_notes, a.physical_name, res.physical_name)
                 a.physical_name = res.physical_name
                 a.domain = res.domain
                 if res.data_type:

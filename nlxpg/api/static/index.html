@@ -10,8 +10,8 @@
   color-scheme: light;
   --bg:#f6f8fa;--panel:#ffffff;--panel2:#eef1f4;--border:#d0d7de;
   --text:#1f2328;--dim:#636c76;--accent:#0969da;
-  --ok:#1a7f37;--warn:#9a6700;--err:#d1242f;--purple:#8250df;
-  --ok-bg:#dafbe1;--warn-bg:#fff8c5;--err-bg:#ffebe9;--accent-bg:#ddf4ff;--purple-bg:#fbefff;
+  --ok:#1a7f37;--warn:#9a6700;--err:#d1242f;--purple:#8250df;--teal:#0b7a75;
+  --ok-bg:#dafbe1;--warn-bg:#fff8c5;--err-bg:#ffebe9;--accent-bg:#ddf4ff;--purple-bg:#fbefff;--teal-bg:#d8f3f0;
   --ctl-h:36px;
   --fs-xs:11px;--fs-sm:12px;--fs-md:13px;--fs-lg:14px;--fs-xl:15px;
   --sp-1:4px;--sp-2:8px;--sp-3:12px;--sp-4:14px;--sp-5:20px;--sp-6:28px;
@@ -94,7 +94,7 @@ label.field > input,label.field > select,label.field > textarea{color:var(--text
 .badge{display:inline-block;padding:1px 7px;border-radius:999px;font-size:var(--fs-xs);font-weight:600;white-space:nowrap;border:1px solid transparent;}
 .b-ok{background:var(--ok-bg);color:var(--ok);} .b-warn{background:var(--warn-bg);color:var(--warn);}
 .b-err{background:var(--err-bg);color:var(--err);} .b-info{background:var(--accent-bg);color:var(--accent);}
-.b-dim{background:var(--panel2);color:var(--dim);} .b-purple{background:var(--purple-bg);color:var(--purple);}
+.b-dim{background:var(--panel2);color:var(--dim);} .b-purple{background:var(--purple-bg);color:var(--purple);} .b-local{background:var(--teal-bg);color:var(--teal);}
 .empty{color:var(--dim);padding:var(--sp-6);text-align:center;}
 .err-box{background:var(--err-bg);color:var(--err);border-radius:6px;padding:var(--sp-3);white-space:pre-wrap;font-family:var(--mono);font-size:var(--fs-sm);}
 #toast{position:fixed;bottom:var(--sp-5);right:var(--sp-5);max-width:480px;padding:var(--sp-3) var(--sp-4);border-radius:8px;background:var(--text);color:#fff;font-size:var(--fs-md);display:none;z-index:50;white-space:pre-wrap;}
@@ -270,6 +270,7 @@ tr.terms td{background:#fbfcfd;padding:var(--sp-2) var(--sp-4) var(--sp-3);}
       <button data-std="lookup">이름 → 표준</button>
       <button data-std="domains">도메인 전체</button>
       <button data-std="search">용어·단어 검색</button>
+      <button data-std="local">기관 추가분</button>
     </div>
     <div data-std-pane="lookup" class="panel panel-pad" style="max-width:1000px;">
       <p class="sub" style="margin-bottom:var(--sp-3)">한 줄에 하나씩(또는 쉼표로) 논리명을 넣으면 설계 때와 같은 규칙으로 물리명·도메인·타입을 정합니다.</p>
@@ -296,6 +297,30 @@ tr.terms td{background:#fbfcfd;padding:var(--sp-2) var(--sp-4) var(--sp-3);}
         <button class="btn sm" id="searchBtn">검색</button>
       </div>
       <div id="searchResult"></div>
+    </div>
+    <div data-std-pane="local" style="display:none;">
+      <p class="sub" style="margin-bottom:var(--sp-3)">공통표준에 없는 이음동의어·단어·용어를 기관이 추가합니다. 공통표준 원본(CSV)은 그대로 두고 그 위에 덧붙이며, 원본과 겹치는 이름·영문약어는 받지 않습니다. 추가하면 바로 설계·검증에 쓰이고, 그렇게 만든 이름은 <span class="badge b-local">기관</span>으로 표시됩니다(ADR-0009).</p>
+      <div class="panel panel-pad hidden" id="locForm" style="margin-bottom:var(--sp-4);">
+        <div class="row" style="align-items:flex-end;flex-wrap:wrap;">
+          <label class="field">구분<select id="locKind"><option value="alias">이음동의어</option><option value="word">단어</option><option value="term">용어</option></select></label>
+          <label class="field">이름<input type="text" id="locName" style="width:160px;" placeholder="비행기"></label>
+          <label class="field" data-loc="alias">대표단어 (공통표준 단어)<input type="text" id="locTarget" style="width:160px;" placeholder="항공기"></label>
+          <label class="field hidden" data-loc="word">영문약어<input type="text" id="locAbbr" style="width:120px;text-transform:uppercase;" placeholder="QQQ"></label>
+          <label class="field hidden" data-loc="word term">영문명<input type="text" id="locEnglish" style="width:180px;" placeholder="비우면 단어 영문명을 이음"></label>
+          <label class="row hidden" data-loc="word" style="align-self:center;"><input type="checkbox" id="locFormat"> 형식단어</label>
+          <label class="field hidden" data-loc="word-format">도메인 분류<select id="locClass"></select></label>
+          <label class="field hidden" data-loc="term">도메인<input type="text" id="locDomain" list="locDomains" style="width:180px;" placeholder="번호V20"><datalist id="locDomains"></datalist></label>
+          <label class="field grow">설명<input type="text" id="locDesc"></label>
+          <button class="btn primary" id="locAdd">추가</button>
+        </div>
+        <p class="sub" id="locHint" style="margin-top:var(--sp-2);"></p>
+      </div>
+      <div class="row" style="margin-bottom:var(--sp-2);">
+        <span class="sub grow" id="locSummary"></span>
+        <a class="btn sm" href="/api/standards/local.csv">CSV 내보내기</a>
+        <input type="file" id="locFile" accept=".csv" hidden><button class="btn sm hidden" id="locImport">CSV 불러오기</button>
+      </div>
+      <div id="locTable"><div class="empty">불러오는 중…</div></div>
     </div>
   </section>
 
@@ -482,7 +507,11 @@ function csv(rows) {
   return "﻿" + rows.map(r => r.map(v => { v = String(v ?? ""); return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v; }).join(",")).join("\n");
 }
 
-const STD = {common: ["공통", "b-ok"], composed: ["조합", "b-warn"], nonstandard: ["비표준", "b-err"]};
+const STD = {common: ["공통", "b-ok"], composed: ["조합", "b-warn"], local: ["기관", "b-local"], nonstandard: ["비표준", "b-err"]};
+// 표준 적용 때 바뀐 물리명의 원래 이름(LLM 제안). 메모 "LLM 제안 'x' → 표준 'y'"에서 뽑는다.
+const LLM_NOTE = /^LLM 제안 '(.*)' → 표준 '.*'$/;
+const llmProposal = notes => { for (const n of notes || []) { const m = n.match(LLM_NOTE); if (m) return m[1]; } return null; };
+const llmTag = notes => { const x = llmProposal(notes); return x ? ` <span class="sub" title="괄호 안은 LLM이 제안한 이름. 공통표준을 적용하며 바꿨습니다">(${esc(x)})</span>` : ""; };
 function stdBadge(status, notes) {
   if (!status) return `<span class="badge b-dim" title="모델링이 추가한 컬럼(대리키·FK)">추가</span>`;
   const [label, cls] = STD[status];
@@ -971,7 +1000,7 @@ function progressHtml(p) {
 }
 
 function stdCounts(ir) {
-  const c = {common: 0, composed: 0, nonstandard: 0, added: 0};
+  const c = {common: 0, composed: 0, local: 0, nonstandard: 0, added: 0};
   ir.entities.forEach(e => e.attributes.forEach(a => c[a.standard || "added"]++));
   return c;
 }
@@ -992,10 +1021,10 @@ function renderSummary(el, ir, nCols) {
     </div>
     <div class="card">
       <div class="k">컬럼 표준 적용 (ADR-0005)</div>
-      <div class="stackbar">${seg(c.common, "var(--ok)")}${seg(c.composed, "#d4a72c")}${seg(c.nonstandard, "var(--err)")}${seg(c.added, "#afb8c1")}</div>
+      <div class="stackbar">${seg(c.common, "var(--ok)")}${seg(c.composed, "#d4a72c")}${seg(c.local, "var(--teal)")}${seg(c.nonstandard, "var(--err)")}${seg(c.added, "#afb8c1")}</div>
       <div class="legend">
         <span><i style="background:var(--ok)"></i>공통표준용어 ${c.common}</span>
-        <span><i style="background:#d4a72c"></i>표준단어 조합(DB표준 후보) ${c.composed}</span>
+        <span><i style="background:#d4a72c"></i>표준단어 조합(DB표준 후보) ${c.composed}</span>${c.local ? `<span><i style="background:var(--teal)"></i>기관 표준 ${c.local}</span>` : ""}
         <span><i style="background:var(--err)"></i>비표준 ${c.nonstandard}</span>
         <span><i style="background:#afb8c1"></i>모델링이 추가(대리키·FK) ${c.added}</span>
       </div>
@@ -1029,7 +1058,7 @@ function bindEv(el) { $$(".ev", el).forEach(x => x.onclick = () => { PENDING_EV 
 function renderTables(el, ir) {
   el.innerHTML = `<div class="row" style="margin-bottom:var(--sp-3);">
       <input type="text" id="tblFilter" class="grow" placeholder="테이블·컬럼 이름으로 거르기">
-      <select id="tblStd"><option value="">모든 컬럼</option><option value="common">공통표준용어</option><option value="composed">표준단어 조합</option><option value="nonstandard">비표준</option><option value="added">추가(대리키·FK)</option></select>
+      <select id="tblStd"><option value="">모든 컬럼</option><option value="common">공통표준용어</option><option value="composed">표준단어 조합</option><option value="local">기관 표준</option><option value="nonstandard">비표준</option><option value="added">추가(대리키·FK)</option></select>
     </div><div id="tblList"></div>`;
   const fk = fkMap(ir);
   const draw = () => {
@@ -1039,7 +1068,7 @@ function renderTables(el, ir) {
         (!q || [e.logical_name, e.physical_name, a.logical_name, a.physical_name].some(s => (s || "").toLowerCase().includes(q))));
       if (!cols.length) return "";
       return `<div class="panel entity">
-        <div class="entity-head"><h3>${esc(e.logical_name)}</h3><code>${esc(e.physical_name)}</code>${stdBadge(e.standard, e.standard_notes)}
+        <div class="entity-head"><h3>${esc(e.logical_name)}</h3><code>${esc(e.physical_name)}</code>${llmTag(e.standard_notes)}${stdBadge(e.standard, e.standard_notes)}
           ${e.aliases?.length ? `<span class="sub">별칭: ${esc(e.aliases.join(", "))}</span>` : ""}
           <span class="sub" style="margin-left:auto;">PK: ${esc(e.primary_key.join(" + "))}</span>
           ${e.description ? `<div class="desc">${esc(e.description)}</div>` : ""}</div>
@@ -1049,8 +1078,9 @@ function renderTables(el, ir) {
         ${cols.map(a => {
           const f = fk[`${e.physical_name}.${a.physical_name}`];
           const keys = [a.is_primary_key && "PK", f && "FK", a.is_unique && !a.is_primary_key && "UK"].filter(Boolean).join(" ");
-          return `<tr><td>${esc(a.logical_name)}${a.standard_notes?.length ? `<div class="note">${esc(a.standard_notes.join("; "))}</div>` : ""}</td>
-            <td><code>${esc(a.physical_name)}</code></td><td class="mono">${esc(a.data_type)}</td><td>${esc(a.domain || "")}</td>
+          const other = (a.standard_notes || []).filter(n => !LLM_NOTE.test(n));
+          return `<tr><td>${esc(a.logical_name)}${other.length ? `<div class="note">${esc(other.join("; "))}</div>` : ""}</td>
+            <td><code>${esc(a.physical_name)}</code>${llmTag(a.standard_notes)}</td><td class="mono">${esc(a.data_type)}</td><td>${esc(a.domain || "")}</td>
             <td>${stdBadge(a.standard, a.standard_notes)}</td><td><span class="key">${keys}</span>${f ? `<div class="note">→ ${esc(f)}</div>` : ""}</td>
             <td>${a.nullable ? "Y" : "N"}</td><td>${esc(a.description)}${a.value_examples?.length ? `<div class="note">예: ${esc(a.value_examples.join(", "))}</div>` : ""}</td>
             <td>${evLinks(a.evidence)}</td></tr>`;
@@ -1219,7 +1249,79 @@ function showStdTab(tab) {
   $$("#stdTabs button").forEach(b => b.classList.toggle("active", b.dataset.std === tab));
   $$("[data-std-pane]").forEach(p => p.style.display = p.dataset.stdPane === tab ? "" : "none");
   if (tab === "domains") loadDomains();
+  if (tab === "local") loadLocal();
 }
+
+// ── 기관 추가 표준 (ADR-0009)
+let LOCAL = null;
+const LOC_HINT = {
+  alias: "공통표준 단어의 다른 이름입니다. 예: 비행기 → 항공기. 문서에 '비행기번호'가 나오면 공통표준 용어 '항공기번호'(arpln_no)로 바뀝니다.",
+  word: "공통표준에 없는 단어입니다. 영문약어는 다른 단어와 겹치면 안 됩니다. 형식단어(번호·명·일자처럼 용어 끝에 와서 도메인을 정하는 단어)면 도메인 분류를 고릅니다.",
+  term: "단어(공통·기관)를 조합한 용어입니다. 영문약어는 단어 약어를 이어 자동으로 만들고, 도메인은 공통표준 도메인에서 고릅니다.",
+};
+function syncLocForm() {
+  const k = $("#locKind").value, fmt = $("#locFormat").checked;
+  $$("[data-loc]").forEach(el => {
+    const on = el.dataset.loc.split(" ").some(x => x === k || (x === "word-format" && k === "word" && fmt));
+    el.classList.toggle("hidden", !on);
+  });
+  $("#locHint").textContent = LOC_HINT[k];
+}
+async function loadLocal() {
+  try { LOCAL = await api("/api/standards/local"); } catch (e) { $("#locTable").innerHTML = `<div class="err-box">${esc(e.message)}</div>`; return; }
+  $("#locForm").classList.toggle("hidden", !ME.is_admin);
+  $("#locImport").classList.toggle("hidden", !ME.is_admin);
+  if (!$("#locClass").options.length) {
+    $("#locClass").innerHTML = LOCAL.domain_classes.map(c => `<option>${esc(c)}</option>`).join("");
+    $("#locDomains").innerHTML = LOCAL.domains.map(d => `<option value="${esc(d)}">`).join("");
+  }
+  syncLocForm();
+  const items = LOCAL.items, bad = items.filter(i => i.rejected).length;
+  $("#locSummary").textContent = `공통표준 ${LOCAL.version}판 + 기관 추가 ${items.length - bad}건` + (bad ? ` (적용 안 됨 ${bad}건)` : "");
+  if (!items.length) { $("#locTable").innerHTML = `<div class="panel empty">아직 기관 추가분이 없습니다.${ME.is_admin ? " 위에서 추가하세요." : ""}</div>`; return; }
+  const detail = i => i.kind === "alias" ? `→ <b>${esc(i.target)}</b>` : i.kind === "word" ? (i.is_format ? `형식단어 · 분류 ${esc(i.domain_class)}` : "") : `도메인 ${esc(i.domain)}`;
+  $("#locTable").innerHTML = `<div class="panel" style="overflow:auto;"><table class="grid">
+    <thead><tr><th>구분</th><th>이름</th><th>영문약어</th><th>내용</th><th>영문명</th><th>설명</th><th>등록</th><th>상태</th>${ME.is_admin ? "<th></th>" : ""}</tr></thead><tbody>
+    ${items.map(i => `<tr data-id="${i.item_id}"><td>${esc(LOCAL.kinds[i.kind])}</td><td><b>${esc(i.name)}</b></td><td><code>${esc(i.abbr || "")}</code></td>
+      <td>${detail(i)}</td><td class="sub">${esc(i.english || "")}</td><td class="sub">${esc(i.description || "")}</td>
+      <td class="sub nw">${esc(i.created_by_name || "")}<div class="note">${fmtTime(i.created_at)}</div></td>
+      <td>${i.rejected ? `<span class="badge b-err" title="${esc(i.rejected)}">적용 안 됨</span><div class="note">${esc(i.rejected)}</div>` : '<span class="badge b-local">적용</span>'}</td>
+      ${ME.is_admin ? `<td><button class="btn sm danger locDel">삭제</button></td>` : ""}</tr>`).join("")}
+    </tbody></table></div>`;
+  $$("#locTable .locDel").forEach(b => b.onclick = async () => {
+    const tr = b.closest("tr"), it = items.find(i => i.item_id === +tr.dataset.id);
+    if (!confirm(`${LOCAL.kinds[it.kind]} '${it.name}'을(를) 지웁니다. 이미 끝난 실행의 결과는 바뀌지 않습니다.`)) return;
+    try { await api(`/api/standards/local/${it.item_id}`, {method: "DELETE"}); toast("지웠습니다"); loadLocal(); } catch (e) { toast(e.message, true); }
+  });
+}
+$("#locKind").onchange = syncLocForm;
+$("#locFormat").onchange = syncLocForm;
+$("#locAdd").onclick = async () => {
+  const k = $("#locKind").value, v = x => $(x).value.trim();
+  const body = {kind: k, name: v("#locName"), description: v("#locDesc")};
+  if (k === "alias") body.target = v("#locTarget");
+  if (k === "word") Object.assign(body, {abbr: v("#locAbbr").toUpperCase(), english: v("#locEnglish"), is_format: $("#locFormat").checked, domain_class: $("#locFormat").checked ? $("#locClass").value : ""});
+  if (k === "term") Object.assign(body, {english: v("#locEnglish"), domain: v("#locDomain")});
+  if (!body.name) return toast("이름을 넣으세요", true);
+  try {
+    const r = await api("/api/standards/local", {method: "POST", headers: {"content-type": "application/json"}, body: JSON.stringify(body)});
+    toast(`추가했습니다${r.abbr ? ` (${r.abbr})` : ""}`);
+    ["#locName", "#locTarget", "#locAbbr", "#locEnglish", "#locDomain", "#locDesc"].forEach(x => $(x).value = "");
+    loadLocal();
+  } catch (e) { toast(e.message, true); }
+};
+$("#locImport").onclick = () => $("#locFile").click();
+$("#locFile").onchange = async e => {
+  const f = e.target.files[0]; e.target.value = "";
+  if (!f) return;
+  const fd = new FormData(); fd.append("file", f);
+  try {
+    const r = await api("/api/standards/local/import", {method: "POST", body: fd});
+    toast(`추가 ${r.added}건, 이미 있음 ${r.skipped}건${r.errors.length ? `, 오류 ${r.errors.length}건` : ""}`, !!r.errors.length);
+    if (r.errors.length) alert("불러오지 못한 항목\n\n" + r.errors.join("\n"));
+    loadLocal();
+  } catch (err) { toast(err.message, true); }
+};
 $$("#stdTabs button").forEach(b => b.onclick = () => go(b.dataset.std === "lookup" ? "std" : `std/${b.dataset.std}`));
 
 let DOMAINS = null, DOM_GROUP = "";
@@ -1304,7 +1406,7 @@ async function doSearch() {
     }[kind];
     $("#searchResult").innerHTML = `<div class="sub" style="margin-bottom:var(--sp-2)">${total}건${total > items.length ? ` 중 ${items.length}건 표시` : ""}</div>
       <table class="grid"><thead><tr>${cols.map(([, l]) => `<th>${l}</th>`).join("")}</tr></thead><tbody>
-      ${items.map(x => `<tr>${cols.map(([k]) => `<td class="${["name", "abbr", "domain"].includes(k) ? "nw" : ""}">${k === "abbr" ? `<code>${esc(x[k])}</code>` : k === "is_format" ? (x[k] ? "Y" : "") : k === "description" ? `<span class="note" style="font-size:var(--fs-sm)">${esc(x[k])}</span>` : esc(x[k] ?? "")}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
+      ${items.map(x => `<tr>${cols.map(([k]) => `<td class="${["name", "abbr", "domain"].includes(k) ? "nw" : ""}">${k === "name" && x.local ? `${esc(x[k])} <span class="badge b-local">기관</span>` : k === "abbr" ? `<code>${esc(x[k])}</code>` : k === "is_format" ? (x[k] ? "Y" : "") : k === "description" ? `<span class="note" style="font-size:var(--fs-sm)">${esc(x[k])}</span>` : esc(x[k] ?? "")}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
   } catch (e) { toast(e.message, true); }
 }
 $("#searchBtn").onclick = doSearch;
@@ -1342,7 +1444,7 @@ $("#checkBtn").onclick = async () => {
   finally { $("#checkBtn").disabled = false; $("#checkMsg").textContent = ""; }
 };
 
-const VERDICT_CLS = {standard: "b-ok", type_mismatch: "b-warn", name_mismatch: "b-purple", composed: "b-info", nonstandard: "b-err", unknown: "b-dim"};
+const VERDICT_CLS = {standard: "b-ok", type_mismatch: "b-warn", name_mismatch: "b-purple", composed: "b-info", local: "b-local", nonstandard: "b-err", unknown: "b-dim"};
 const CHECK_HEADER = ["테이블", "컬럼 한글명", "컬럼 영문명", "데이터타입", "판정", "표준용어명", "표준 영문명", "표준도메인", "표준 타입", "비고"];
 function drawCheck() {
   const r = CHECK_REPORT, L = r.labels, n = r.columns.length;

@@ -154,3 +154,23 @@ CREATE TABLE IF NOT EXISTS nlxpg_llm_calls (
     created_at     timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS nlxpg_llm_calls_run ON nlxpg_llm_calls (run_id, call_id);
+
+-- ── 기관 추가 표준 (ADR-0009, 2026-10-01) ───────────────────────────
+-- 공통표준 CSV(data/standards/)는 고치지 않고, 기관이 추가한 항목만 둔다. 서버가 공통표준 위에 덧붙인다.
+-- 원본과 겹치는 이름·약어는 화면·API에서 거부한다(nlxpg/standards/local.py).
+CREATE TABLE IF NOT EXISTS nlxpg_std_local (
+    item_id       serial PRIMARY KEY,
+    kind          text NOT NULL CHECK (kind IN ('alias', 'word', 'term')),
+    name          text NOT NULL,
+    abbr          text NOT NULL DEFAULT '',     -- 단어·용어 영문약어 (대문자)
+    english       text NOT NULL DEFAULT '',
+    description   text NOT NULL DEFAULT '',
+    is_format     boolean NOT NULL DEFAULT false,  -- 단어: 형식단어 여부
+    domain_class  text NOT NULL DEFAULT '',     -- 단어: 형식단어의 도메인 분류
+    target        text NOT NULL DEFAULT '',     -- 이음동의어: 대표단어
+    domain        text NOT NULL DEFAULT '',     -- 용어: 공통표준 도메인명
+    created_by    integer REFERENCES nlxpg_users (user_id) ON DELETE SET NULL,
+    created_at    timestamptz NOT NULL DEFAULT now(),
+    updated_at    timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (kind, name)
+);
