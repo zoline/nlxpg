@@ -83,4 +83,4 @@ flowchart LR
 2. 의미 기반 정합: 이름이 달라도 같은 개념을 합칩니다.
 3. 사내 문서 파일럿: HWP 지원, 사람 검토 루프, pgxnl 연계.
 
-자세한 목표와 일정은 [기획서](plan.md), 설계 결정은 [ADR 목록](adr/README.md)에 있습니다.
+사용법은 [사용자 매뉴얼](user-guide.md), 자세한 목표와 일정은 [기획서](plan.md), 설계 결정은 [ADR 목록](adr/README.md)에 있습니다.

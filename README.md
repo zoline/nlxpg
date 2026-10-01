@@ -3,7 +3,7 @@
 업무 문서에서 PostgreSQL 스키마 초안(테이블 정의서, ERD, DDL)을 만드는 도구입니다. 명명·타입에는 행정안전부 공공데이터 공통표준을 적용하고, DDL은 샌드박스에서 실행해 검증합니다. pgxnl(Text-to-SQL)의 역방향(NL → PG)입니다.
 
 - 버전: **0.5.0** — 시험판. 정답 스키마 대비 정량 평가 전입니다 ([변경 이력](CHANGELOG.md))
-- 처음이라면 [소개 문서](docs/overview.md)부터 읽습니다
+- 처음이라면 [소개 문서](docs/overview.md)부터 읽고, 사용법은 [사용자 매뉴얼](docs/user-guide.md)을 봅니다
 
 ## 기능
 
@@ -30,7 +30,7 @@ deploy/install.sh --pg-local --service      # 가상환경, 시스템 DB 생성,
 
 1. `http://<서버>:8200`에 관리자로 로그인합니다. 초기 비밀번호는 설치 출력에 나옵니다.
 2. **관리 → 모델 설정**에서 LLM 프로필을 등록합니다.
-3. **새 설계**에서 문서를 올립니다.
+3. **새 설계**에서 문서를 올립니다. 처음이라면 [사용자 매뉴얼 2장](docs/user-guide.md#2-따라-하기-한빛항공사-예제)의 예제를 따라 합니다.
 
 LLM 설정은 시스템 DB에만 저장합니다([ADR-0007](docs/adr/0007-llm-settings-in-db.md)). `.env`에는 시스템 DB 접속(`NLXPG_SYSTEM_PG_DSN`)과 암호화 키(`NLXPG_SECRET_KEY`)만 있으면 됩니다. 나머지 항목은 [.env.example](.env.example)에 있습니다.
 
@@ -85,7 +85,7 @@ nlxpg/
 db/schema.sql     시스템 DB 스키마
 data/standards/   공통표준 CSV (2025-11-01 판) · data/samples/ 공개 샘플 문서
 deploy/           install.sh, nlxpg.service
-docs/             overview, plan(기획서), install, release, adr/
+docs/             overview, user-guide(매뉴얼), plan(기획서), install, release, adr/
 ```
 
 ## 문서
@@ -93,6 +93,7 @@ docs/             overview, plan(기획서), install, release, adr/
 | 문서 | 내용 |
 | --- | --- |
 | [docs/overview.md](docs/overview.md) | 소개: 무엇을, 어떻게, 보안, 현재 수준과 한계 |
+| [docs/user-guide.md](docs/user-guide.md) | 사용자 매뉴얼: 화면별 사용법, 한빛항공사 따라 하기 예제, 관리자 기능, 문제 해결 |
 | [docs/nlxpg-0.5-소개.pptx](docs/nlxpg-0.5-소개.pptx) | 소개 발표 자료 (10장, 소개 문서와 같은 내용) |
 | [docs/plan.md](docs/plan.md) | 기획서: 목표, 아키텍처, 평가, 로드맵, 보안 기준 |
 | [docs/install.md](docs/install.md) | 설치·운영·백업·문제 해결 |
