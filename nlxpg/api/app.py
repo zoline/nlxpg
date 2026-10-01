@@ -52,6 +52,7 @@ from nlxpg.standards.local import (
     check_item,
     dependents,
     from_csv,
+    import_items,
     to_csv,
 )
 from nlxpg.standards.resolve import normalize_name
@@ -876,21 +877,10 @@ async def local_import(file: Annotated[UploadFile, File()], admin: AdminUser) ->
         items = from_csv((await file.read()).decode("utf-8-sig"))
     except (LocalConflict, UnicodeDecodeError) as exc:
         raise HTTPException(400, f"CSV를 읽을 수 없다: {exc}") from exc
-    existing = {(i.kind, normalize_name(i.name)) for i in await _local().list()}
-    added, skipped, errors = 0, 0, []
-    order = {"word": 0, "alias": 1, "term": 2}  # 단어를 먼저 넣어야 이음동의어·용어가 그 단어를 쓴다
-    for item in sorted(items, key=lambda i: order[i.kind]):
-        if (item.kind, normalize_name(item.name)) in existing:
-            skipped += 1
-            continue
-        try:
-            checked = _checked(LocalIn(**{k: v for k, v in item.__dict__.items() if k != "item_id"}))
-        except HTTPException as exc:
-            errors.append(f"{KIND_LABEL[item.kind]} '{item.name}': {exc.detail}")
-            continue
-        await _local().add(checked, admin.user_id)
-        await _reload_local()
-        added += 1
+    assert state.base_standards is not None
+    added, skipped, errors = await import_items(_local(), state.base_standards, items, admin.user_id)
+    await _reload_local()
+    log.info("기관 표준 불러오기: 추가 %d, 건너뜀 %d, 오류 %d by %s", added, skipped, len(errors), admin.username)
     return {"added": added, "skipped": skipped, "errors": errors}
 
 

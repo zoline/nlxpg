@@ -47,6 +47,7 @@ nlxpg check                                  # LLM·시스템 DB 접속 확인
 nlxpg design 문서.md -o out/x [--debug]      # 설계 (화면 없이). DB 없이: --no-store --no-sandbox
 nlxpg standards lookup 거래처명 주문일자      # 이름 → 표준 물리명·도메인
 nlxpg standards check --ddl schema.sql       # 표준 검증 (--dsn, --run도 가능)
+nlxpg standards local list | import | export # 기관 추가 표준 (예시: data/samples/기관표준_예시.csv)
 nlxpg normalize --run 2                      # 정규형 검사
 nlxpg runs list | delete N                   # 실행 이력
 nlxpg users list | add | passwd | set        # 웹 UI 사용자

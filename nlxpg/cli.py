@@ -37,6 +37,8 @@ runs_app = typer.Typer(no_args_is_help=True, help="실행 이력")
 app.add_typer(runs_app, name="runs")
 std_app = typer.Typer(no_args_is_help=True, help="공공데이터 공통표준 (ADR-0005)")
 app.add_typer(std_app, name="standards")
+local_app = typer.Typer(no_args_is_help=True, help="기관 추가 표준 (ADR-0009)")
+std_app.add_typer(local_app, name="local")
 
 
 @app.callback()
@@ -454,6 +456,85 @@ async def _standards_async(s, *, always: bool = False):  # type: ignore[no-untyp
 
 def _load_standards(s, *, always: bool = False):  # type: ignore[no-untyped-def]
     return asyncio.run(_standards_async(s, always=always))
+
+
+async def _with_local_store(fn):  # type: ignore[no-untyped-def]
+    from nlxpg.standards.local import LocalStore
+    from nlxpg.store import RunStore
+
+    s = load_settings()
+    if not s.system_pg_dsn:
+        raise typer.BadParameter("시스템 DB(NLXPG_SYSTEM_PG_DSN)가 필요하다 — 기관 표준은 DB에 있다")
+    store = await RunStore.connect(s.system_pg_dsn)
+    try:
+        return await fn(LocalStore(store.pool), s)
+    finally:
+        await store.close()
+
+
+@local_app.command("list")
+def local_list() -> None:
+    """기관 추가 표준 목록. 공통표준과 충돌해 적용되지 않는 항목은 이유를 함께 보여 준다."""
+    from nlxpg.standards import load_standards
+    from nlxpg.standards.local import KIND_LABEL, apply_local
+
+    async def go(ls, s):  # type: ignore[no-untyped-def]
+        items = await ls.list()
+        return items, apply_local(load_standards(s.standards_dir, s.standards_version), items)
+
+    items, applied = asyncio.run(_with_local_store(go))
+    rejected = {i.item_id: why for i, why in applied.rejected}
+    typer.echo(f"기관 추가 {len(applied.applied)}건 적용" + (f", 적용 안 됨 {len(rejected)}건" if rejected else ""))
+    for i in items:
+        detail = f"→ {i.target}" if i.kind == "alias" else (f"도메인 {i.domain}" if i.kind == "term" else "")
+        line = f"  [{KIND_LABEL[i.kind]}] {i.name} {i.abbr} {detail}".rstrip()
+        if i.item_id in rejected:
+            typer.secho(f"{line}  (적용 안 됨: {rejected[i.item_id]})", fg="red")
+        else:
+            typer.echo(line)
+
+
+@local_app.command("import")
+def local_import(
+    csv_file: Annotated[Path, typer.Argument(exists=True, dir_okay=False, help="기관 표준 CSV (예: data/samples/기관표준_예시.csv)")],
+) -> None:
+    """CSV의 기관 표준을 시스템 DB에 넣는다. 이미 있는 항목은 건너뛴다(웹 화면의 CSV 불러오기와 같다).
+    실행 중인 웹 서버에는 재시작 후 반영된다."""
+    from nlxpg.standards import load_standards
+    from nlxpg.standards.local import LocalConflict, from_csv, import_items
+
+    try:
+        items = from_csv(csv_file.read_text(encoding="utf-8-sig"))
+    except LocalConflict as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
+    async def go(ls, s):  # type: ignore[no-untyped-def]
+        return await import_items(ls, load_standards(s.standards_dir, s.standards_version), items, None)
+
+    added, skipped, errors = asyncio.run(_with_local_store(go))
+    typer.secho(f"추가 {added}건, 이미 있음 {skipped}건, 오류 {len(errors)}건", fg="red" if errors else "green")
+    for e in errors:
+        typer.secho(f"  {e}", fg="red")
+    if added:
+        typer.echo("웹 서버가 떠 있으면 재시작해야 반영된다 (sudo systemctl restart nlxpg)")
+
+
+@local_app.command("export")
+def local_export(
+    out: Annotated[Path | None, typer.Argument(dir_okay=False, help="저장할 CSV. 없으면 화면에 출력")] = None,
+) -> None:
+    """기관 추가 표준을 CSV로 내보낸다."""
+    from nlxpg.standards.local import to_csv
+
+    async def go(ls, s):  # type: ignore[no-untyped-def]
+        return await ls.list()
+
+    text = to_csv(asyncio.run(_with_local_store(go)))
+    if out:
+        out.write_text(text, encoding="utf-8")
+        typer.echo(f"→ {out}")
+    else:
+        typer.echo(text.lstrip("\ufeff"), nl=False)
 
 
 @std_app.command("lookup")

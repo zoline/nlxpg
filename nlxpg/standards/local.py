@@ -184,6 +184,33 @@ class LocalStore:
         return (await self._pool.execute("DELETE FROM nlxpg_std_local WHERE item_id = $1", item_id)).endswith("1")
 
 
+async def import_items(
+    store: LocalStore, base: Standards, items: list[LocalItem], user_id: int | None,
+) -> tuple[int, int, list[str]]:
+    """CSV 등에서 읽은 항목을 한 행씩 검증해 넣는다(웹 API·CLI 공용).
+    이미 같은 (구분, 이름)이 있으면 건너뛰고, 문제가 있는 행은 이유를 모은다. → (추가, 건너뜀, 오류)"""
+    existing = await store.list()
+    have = {(i.kind, normalize_name(i.name)) for i in existing}
+    std = apply_local(base, existing).standards
+    added, skipped, errors = 0, 0, []
+    order = {"word": 0, "alias": 1, "term": 2}  # 단어를 먼저 넣어야 이음동의어·용어가 그 단어를 쓴다
+    for item in sorted(items, key=lambda i: order[i.kind]):
+        if (item.kind, normalize_name(item.name)) in have:
+            skipped += 1
+            continue
+        try:
+            checked = check_item(std, item, base)
+        except LocalConflict as exc:
+            errors.append(f"{KIND_LABEL[item.kind]} '{item.name}': {exc}")
+            continue
+        checked.item_id = await store.add(checked, user_id)
+        existing.append(checked)
+        have.add((checked.kind, checked.name))
+        std = apply_local(base, existing).standards
+        added += 1
+    return added, skipped, errors
+
+
 def dependents(items: list[LocalItem], std: Standards, word: str) -> list[str]:
     """기관 단어 word를 쓰는 기관 이음동의어·용어 (지우기 전에 확인)."""
     out = [f"이음동의어 '{i.name}'" for i in items if i.kind == "alias" and i.target == word]

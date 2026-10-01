@@ -91,3 +91,43 @@ def test_check_verdict_local(base):
     ])
     assert [c.verdict for c in report.columns] == ["local", "name_mismatch"]
     assert report.summary["local"] == 1 and report.compliance == 0.0  # 기관 표준은 준수율에 넣지 않는다
+
+
+class _MemStore:
+    """LocalStore 대역 (DB 없이 import_items 시험)."""
+
+    def __init__(self, items=None):
+        self.items = list(items or [])
+
+    async def list(self):
+        return list(self.items)
+
+    async def add(self, item, user_id):
+        item.item_id = len(self.items) + 1
+        self.items.append(item)
+        return item.item_id
+
+
+async def test_import_items_orders_words_first_and_skips_existing(base):
+    from nlxpg.standards.local import import_items
+
+    store = _MemStore([LocalItem("alias", "비행기", target="항공기", item_id=1)])
+    rows = from_csv(
+        "구분,이름,영문약어명,영문명,설명,형식단어여부,도메인분류명,대표단어,도메인명\n"
+        "용어,쀍번호,,,,,,,번호V20\n"          # 단어보다 먼저 와도 단어를 먼저 넣는다
+        "단어,쀍,QQQ,Qqq,,N,,,\n"
+        "이음동의어,비행기,,,,,,항공기,\n"     # 이미 있음
+        "이음동의어,쀏,,,,,,없는단어,\n"       # 오류
+    )
+    added, skipped, errors = await import_items(store, base, rows, None)
+    assert (added, skipped) == (2, 1)
+    assert errors == ["이음동의어 '쀏': 대표단어 '없는단어'이(가) 단어에 없다"]
+    assert [(i.kind, i.name, i.abbr) for i in store.items[1:]] == [("word", "쀍", "QQQ"), ("term", "쀍번호", "QQQ_NO")]
+
+
+def test_sample_csv_in_repo_applies_cleanly(base):
+    """저장소의 예시 CSV(data/samples/기관표준_예시.csv)가 공통표준과 충돌 없이 적용된다."""
+    path = Path(__file__).parent.parent / "data" / "samples" / "기관표준_예시.csv"
+    applied = apply_local(base, from_csv(path.read_text(encoding="utf-8-sig")))
+    assert not applied.rejected and applied.applied
+    assert resolve_attribute(applied.standards, "비행기번호").physical_name == "arpln_no"

@@ -77,6 +77,7 @@ LLM은 `.env`가 아니라 **시스템 DB**에 둔다. `.env`에는 시스템 DB
 - 주소가 비어 있으면 호출하지 않는다(공개 OpenAI API로 나가지 않게, ADR-0002).
 - 화면을 쓸 수 없는 서버: `.venv/bin/nlxpg setup llm` (같은 프로필을 DB에 만든다. `--role testdoc`도 가능)
 - 첫 관리자 비밀번호를 미리 정하려면 설치 전에 `.env`에 `NLXPG_ADMIN_INITIAL_PASSWORD`를 적는다.
+- 기관 추가 표준(ADR-0009) 예시를 넣으려면 `.venv/bin/nlxpg standards local import data/samples/기관표준_예시.csv` (또는 웹 UI 공통표준 → 기관 추가분 → CSV 불러오기). 선택 사항이다.
 
 ## 5. 실행과 관리
 
