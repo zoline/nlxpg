@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.env
+.env.bak*
+# 산출물 (사내 문서 기반 결과는 원문과 같은 등급으로 관리 — plan.md §데이터 보안)
+out/
+data/private/
+# 공공데이터베이스 표준화 관리 매뉴얼 PDF: 이용 조건 표시가 없어 재배포하지 않는다 (THIRD_PARTY_NOTICES.md 4절)
+docs/reference/*.pdf
+# 작업 기록: 운영 환경 정보(서버 주소, 계정 운영 내역)가 있어 공개 저장소에 올리지 않는다. 로컬에만 둔다(CLAUDE.md)
+docs/history/

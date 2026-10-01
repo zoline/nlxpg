@@ -1,0 +1,18 @@
+# nlxpg 웹 UI. deploy/install.sh --service가 실행 사용자·설치 경로·포트를 채워
+# /etc/systemd/system/nlxpg.service로 설치한다.
+[Unit]
+Description=nlxpg web UI (문서 → PostgreSQL 스키마)
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=@USER@
+WorkingDirectory=@ROOT@
+ExecStart=@ROOT@/.venv/bin/nlxpg serve --host 0.0.0.0 --port @PORT@
+Restart=on-failure
+RestartSec=5
+# 설정은 @ROOT@/.env에서 읽는다 (nlxpg/settings.py)
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,1373 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>nlxpg — 문서 → PostgreSQL 스키마</title>
+<style>
+/* 색·글꼴·여백 변수는 pgxnl(index.html)과 같게 둔다. 두 도구를 오가도 같은 제품처럼 보이게. */
+:root {
+  color-scheme: light;
+  --bg:#f6f8fa;--panel:#ffffff;--panel2:#eef1f4;--border:#d0d7de;
+  --text:#1f2328;--dim:#636c76;--accent:#0969da;
+  --ok:#1a7f37;--warn:#9a6700;--err:#d1242f;--purple:#8250df;
+  --ok-bg:#dafbe1;--warn-bg:#fff8c5;--err-bg:#ffebe9;--accent-bg:#ddf4ff;--purple-bg:#fbefff;
+  --ctl-h:36px;
+  --fs-xs:11px;--fs-sm:12px;--fs-md:13px;--fs-lg:14px;--fs-xl:15px;
+  --sp-1:4px;--sp-2:8px;--sp-3:12px;--sp-4:14px;--sp-5:20px;--sp-6:28px;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,'Segoe UI','Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-size:var(--fs-md);min-height:100vh;}
+button,input,select,textarea{font:inherit;color:inherit;}
+a{color:var(--accent);text-decoration:none;}
+a:hover{text-decoration:underline;}
+code,pre,.mono{font-family:var(--mono);}
+
+/* ── 사이드바 (pgxnl index.html의 .sidebar·.nav-* 규칙을 그대로 따른다) ── */
+#app{display:none;flex-direction:row;min-height:100vh;}
+.sidebar{display:flex;flex-direction:column;width:180px;height:100vh;flex-shrink:0;position:sticky;top:0;
+  background:var(--panel);border-right:1px solid var(--border);}
+.sidebar .logo{font-size:24px;font-weight:800;letter-spacing:-.5px;
+  padding:20px 18px 16px;white-space:nowrap;border-bottom:1px solid var(--border);}
+.sidebar .logo span{color:var(--accent);}
+.nav-tabs{display:flex;flex-direction:column;gap:3px;padding:12px 8px;flex:1;overflow-y:auto;}
+.nav-section-label{font-size:16px;color:var(--text);padding:18px 12px 6px;letter-spacing:-.2px;font-weight:700;}
+.nav-section-label:first-child{padding-top:6px;}
+.nav-sub{padding:8px 12px 8px 20px;border-radius:6px;font-size:var(--fs-lg);cursor:pointer;
+  color:var(--text);opacity:.75;font-weight:500;background:none;border:none;text-align:left;width:100%;}
+.nav-sub:hover{color:var(--text);opacity:1;background:var(--panel2);}
+.nav-sub.active{color:var(--accent);opacity:1;font-weight:600;background:rgba(9,105,218,.1);}
+.nav-sub:disabled,.nav-tab:disabled{opacity:.3;cursor:not-allowed;background:none;}
+/* pgxnl의 사용자 정보 자리. 로그인이 없어 연결 상태를 둔다. 누르면 시스템 정보로 간다. */
+.side-status{display:flex;flex-direction:column;gap:6px;font-size:var(--fs-sm);color:var(--dim);
+  padding:14px;border-top:1px solid var(--border);cursor:pointer;}
+.side-status:hover{background:var(--panel2);}
+.side-status div{display:flex;align-items:center;gap:6px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--dim);flex-shrink:0;}
+.dot.ok{background:var(--ok);} .dot.err{background:var(--err);}
+
+.content{flex:1;padding:28px 32px;min-width:0;overflow-x:hidden;}
+/* 로그인 화면 — pgxnl의 #loginScreen·.login-box와 같은 모양 */
+#loginScreen{display:none;align-items:center;justify-content:center;min-height:100vh;}
+.login-box{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:40px 36px;width:360px;}
+.login-box h1{font-size:22px;margin-bottom:4px;} .login-box h1 span{color:var(--accent);}
+.login-sub{color:var(--dim);font-size:var(--fs-md);margin-bottom:28px;}
+.login-box label{display:block;font-size:var(--fs-md);color:var(--dim);margin:12px 0 4px;}
+.login-box input{width:100%;}
+.login-box .btn{width:100%;margin-top:20px;height:42px;}
+.login-err{color:var(--err);font-size:var(--fs-md);margin-top:10px;text-align:center;min-height:18px;}
+/* 사이드바 아래 사용자 정보 — pgxnl .user-info */
+.user-info{display:flex;flex-direction:column;gap:6px;font-size:var(--fs-md);padding:12px 14px 14px;border-top:1px solid var(--border);}
+.user-name{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.badge-role{background:rgba(9,105,218,.15);color:var(--accent);padding:2px 8px;border-radius:10px;font-size:var(--fs-sm);width:fit-content;}
+.btn-logout{background:none;border:1px solid var(--border);color:var(--dim);border-radius:6px;padding:6px 10px;font-size:var(--fs-md);cursor:pointer;width:100%;}
+.btn-logout:hover{border-color:var(--err);color:var(--err);}
+.nav-tab{padding:10px 12px;border-radius:6px;font-size:16px;font-weight:700;cursor:pointer;color:var(--text);background:none;border:none;text-align:left;width:100%;margin-top:8px;}
+.nav-tab:hover{color:var(--accent);background:var(--panel2);} .nav-tab.active{color:var(--accent);background:rgba(9,105,218,.1);}
+.secret{font-family:var(--mono);font-size:17px;background:var(--warn-bg);border:1px dashed #d4a72c;border-radius:6px;padding:6px 12px;user-select:all;}
+.hidden{display:none!important;}
+.view{display:none;} .view.active{display:block;}
+.page-title{font-size:20px;font-weight:700;margin-bottom:4px;}
+.page-desc{color:var(--dim);font-size:var(--fs-md);margin-bottom:var(--sp-4);}
+
+/* ── 공통 부품 ── */
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:8px;}
+.panel-pad{padding:var(--sp-4);}
+.section-title{font-size:17px;font-weight:600;margin-bottom:var(--sp-3);}
+.sub{color:var(--dim);font-size:var(--fs-sm);}
+.btn{height:var(--ctl-h);padding:0 var(--sp-4);border:1px solid var(--border);border-radius:6px;background:var(--panel2);cursor:pointer;font-size:var(--fs-lg);}
+.btn:hover{background:#e4e8ec;}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600;}
+.btn.primary:hover{background:#0860ca;}
+.btn.sm{height:28px;padding:0 var(--sp-3);font-size:var(--fs-md);}
+.btn:disabled{opacity:.5;cursor:not-allowed;}
+.btn.danger{color:var(--err);background:var(--panel);}
+.btn.danger:hover:not(:disabled){background:var(--err-bg);border-color:var(--err);}
+input[type=text],input[type=password],input[type=number],select,textarea{border:1px solid var(--border);border-radius:6px;background:var(--panel);padding:0 var(--sp-3);height:var(--ctl-h);font-size:var(--fs-lg);}
+textarea{height:auto;padding:var(--sp-2) var(--sp-3);resize:vertical;}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--accent-bg);border-color:var(--accent);}
+label.field{display:flex;flex-direction:column;gap:var(--sp-1);font-size:var(--fs-md);color:var(--dim);}
+label.field > input,label.field > select,label.field > textarea{color:var(--text);}
+.row{display:flex;gap:var(--sp-3);align-items:center;flex-wrap:wrap;}
+.grow{flex:1;min-width:0;}
+.badge{display:inline-block;padding:1px 7px;border-radius:999px;font-size:var(--fs-xs);font-weight:600;white-space:nowrap;border:1px solid transparent;}
+.b-ok{background:var(--ok-bg);color:var(--ok);} .b-warn{background:var(--warn-bg);color:var(--warn);}
+.b-err{background:var(--err-bg);color:var(--err);} .b-info{background:var(--accent-bg);color:var(--accent);}
+.b-dim{background:var(--panel2);color:var(--dim);} .b-purple{background:var(--purple-bg);color:var(--purple);}
+.empty{color:var(--dim);padding:var(--sp-6);text-align:center;}
+.err-box{background:var(--err-bg);color:var(--err);border-radius:6px;padding:var(--sp-3);white-space:pre-wrap;font-family:var(--mono);font-size:var(--fs-sm);}
+#toast{position:fixed;bottom:var(--sp-5);right:var(--sp-5);max-width:480px;padding:var(--sp-3) var(--sp-4);border-radius:8px;background:var(--text);color:#fff;font-size:var(--fs-md);display:none;z-index:50;white-space:pre-wrap;}
+#toast.err{background:var(--err);}
+
+table.grid{width:100%;border-collapse:collapse;font-size:var(--fs-md);}
+table.grid th{text-align:left;font-weight:600;color:var(--dim);background:var(--panel2);padding:6px var(--sp-2);border-bottom:1px solid var(--border);white-space:nowrap;position:sticky;top:0;}
+table.grid td{padding:6px var(--sp-2);border-bottom:1px solid var(--panel2);vertical-align:top;overflow-wrap:anywhere;}
+table.grid td.nw{white-space:nowrap;overflow-wrap:normal;}
+table.grid tr:hover td{background:#f9fafb;}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;}
+.note{color:var(--dim);font-size:var(--fs-xs);margin-top:2px;}
+
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--border);margin-bottom:var(--sp-4);}
+.tabs button{background:none;border:none;padding:var(--sp-2) var(--sp-4);cursor:pointer;color:var(--dim);border-bottom:2px solid transparent;margin-bottom:-1px;font-size:var(--fs-lg);}
+.tabs button.active{color:var(--text);border-bottom-color:var(--accent);font-weight:600;}
+.tabs button .cnt{font-size:var(--fs-xs);color:var(--dim);margin-left:4px;}
+
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:var(--sp-3);margin-bottom:var(--sp-4);}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:var(--sp-3) var(--sp-4);}
+.card .k{font-size:var(--fs-sm);color:var(--dim);}
+.card .v{font-size:22px;font-weight:600;margin-top:2px;font-variant-numeric:tabular-nums;}
+.card .v small{font-size:var(--fs-md);color:var(--dim);font-weight:400;}
+.card.clickable{cursor:pointer;} .card.clickable:hover{border-color:var(--accent);}
+.card.selected{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent);}
+.stackbar{display:flex;height:10px;border-radius:5px;overflow:hidden;background:var(--panel2);margin-top:var(--sp-2);}
+.stackbar div{height:100%;}
+.legend{display:flex;gap:var(--sp-3);font-size:var(--fs-sm);color:var(--dim);margin-top:var(--sp-2);flex-wrap:wrap;}
+.legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:4px;vertical-align:-1px;}
+
+/* ── 실행 이력 ── */
+.runs-layout{display:grid;grid-template-columns:320px 1fr;gap:var(--sp-4);align-items:start;}
+.run-list{max-height:calc(100vh - 120px);overflow:auto;position:sticky;top:20px;}
+.run-item{padding:var(--sp-3) var(--sp-4);border-bottom:1px solid var(--panel2);cursor:pointer;}
+.run-item:hover{background:#f9fafb;}
+.run-item.active{background:var(--accent-bg);}
+.run-item .t{font-weight:600;display:flex;gap:var(--sp-2);align-items:center;}
+.run-item .t .id{color:var(--dim);font-weight:400;font-size:var(--fs-sm);}
+.run-item .m{font-size:var(--fs-sm);color:var(--dim);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.detail-head{display:flex;align-items:flex-start;gap:var(--sp-3);margin-bottom:var(--sp-4);}
+.detail-head h2{font-size:19px;}
+.progress{margin:var(--sp-4) 0;}
+.pbar{height:8px;background:var(--panel2);border-radius:4px;overflow:hidden;margin-top:var(--sp-2);}
+.pbar div{height:100%;background:var(--accent);transition:width .4s;}
+.steps{display:flex;gap:var(--sp-2);margin-top:var(--sp-3);flex-wrap:wrap;}
+.steps span{padding:3px 10px;border-radius:999px;background:var(--panel2);color:var(--dim);font-size:var(--fs-sm);}
+.steps span.on{background:var(--accent);color:#fff;} .steps span.done{background:var(--ok-bg);color:var(--ok);}
+
+.entity{margin-bottom:var(--sp-4);}
+.entity-head{padding:var(--sp-3) var(--sp-4);border-bottom:1px solid var(--border);display:flex;gap:var(--sp-2);align-items:baseline;flex-wrap:wrap;}
+.entity-head h3{font-size:var(--fs-xl);}
+.entity-head .desc{width:100%;color:var(--dim);font-size:var(--fs-md);margin-top:2px;}
+.key{font-family:var(--mono);font-size:var(--fs-xs);font-weight:700;color:var(--purple);}
+.ev{font-size:var(--fs-xs);color:var(--accent);cursor:pointer;display:block;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.erd-box{overflow:auto;padding:var(--sp-4);min-height:300px;max-height:calc(100vh - 230px);}
+.erd-box svg{max-width:none!important;}
+pre.code{background:var(--panel2);border-radius:6px;padding:var(--sp-4);overflow:auto;font-size:var(--fs-sm);line-height:1.5;max-height:calc(100vh - 260px);}
+.doc-view{max-height:calc(100vh - 260px);overflow:auto;padding:var(--sp-4) var(--sp-5);line-height:1.7;font-size:var(--fs-lg);}
+.doc-view .h{font-weight:700;margin:var(--sp-4) 0 var(--sp-1);scroll-margin-top:20px;border-radius:4px;padding:0 4px;}
+.doc-view .h1{font-size:19px;} .doc-view .h2{font-size:17px;} .doc-view .h3{font-size:var(--fs-xl);}
+.doc-view .l{white-space:pre-wrap;}
+.doc-view .flash{background:var(--warn-bg);outline:2px solid #d4a72c;}
+.review-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:var(--sp-3);}
+.score{display:flex;gap:4px;margin-top:4px;}
+.score label{flex:1;text-align:center;border:1px solid var(--border);border-radius:6px;padding:4px 0;cursor:pointer;color:var(--text);}
+.score input{display:none;}
+.score input:checked + span{font-weight:700;}
+.score label:has(input:checked){background:var(--accent);border-color:var(--accent);color:#fff;}
+
+/* ── 새 설계 ── */
+.drop{border:2px dashed var(--border);border-radius:8px;padding:var(--sp-6);text-align:center;color:var(--dim);cursor:pointer;background:var(--panel);}
+.drop.over{border-color:var(--accent);background:var(--accent-bg);}
+.file-list{margin-top:var(--sp-3);display:flex;flex-direction:column;gap:var(--sp-1);}
+.file-list div{display:flex;gap:var(--sp-2);align-items:center;font-size:var(--fs-md);}
+.warnbox{background:var(--warn-bg);color:var(--warn);border-radius:6px;padding:var(--sp-3);font-size:var(--fs-md);}
+
+.chip{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border:1px solid var(--border);border-radius:999px;background:var(--panel);white-space:nowrap;font-size:var(--fs-sm);}
+.chips{display:flex;gap:4px;flex-wrap:wrap;}
+.chips button{border:1px solid var(--border);background:var(--panel);border-radius:999px;padding:3px 10px;font-size:var(--fs-sm);cursor:pointer;color:var(--dim);}
+.chips button.on{background:var(--accent);border-color:var(--accent);color:#fff;}
+tr.grp td{background:var(--panel2);font-weight:700;font-size:var(--fs-lg);padding-top:10px;}
+tr.cls td{background:#fafbfc;border-bottom:1px solid var(--border);}
+tr.cls .fw{color:var(--dim);font-size:var(--fs-sm);font-weight:400;margin-left:var(--sp-2);}
+td.adapted{color:var(--purple);font-weight:600;}
+a.cnt{cursor:pointer;}
+tr.terms td{background:#fbfcfd;padding:var(--sp-2) var(--sp-4) var(--sp-3);}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:var(--sp-4);align-items:start;}
+.scroll{max-height:calc(100vh - 330px);overflow:auto;}
+@media (max-width:1100px){.runs-layout,.two{grid-template-columns:1fr;}}
+@media (max-width:760px){.sidebar{width:140px;} .content{padding:20px 16px;}}
+</style>
+</head>
+<body>
+<div id="loginScreen">
+  <form class="login-box" id="loginForm">
+    <h1>nlx<span>pg</span></h1>
+    <div class="login-sub">문서 → PostgreSQL 스키마</div>
+    <label>아이디</label><input type="text" id="loginUser" autocomplete="username" required>
+    <label>비밀번호</label><input type="password" id="loginPass" autocomplete="current-password" required>
+    <button class="btn primary" type="submit">로그인</button>
+    <div class="login-err" id="loginErr"></div>
+  </form>
+</div>
+<div id="app">
+<aside class="sidebar">
+  <div class="logo" title="문서 → PostgreSQL 스키마">nlx<span>pg</span></div>
+  <nav class="nav-tabs" id="nav">
+    <div class="nav-section-label">설계</div>
+    <button class="nav-sub" data-view="new">새 설계</button>
+    <button class="nav-sub" data-view="runs">실행 이력</button>
+    <div class="nav-section-label">검증</div>
+    <button class="nav-sub" data-view="check">표준 검증</button>
+    <button class="nav-sub" data-view="nf">정규형 검사</button>
+    <div class="nav-section-label">기준정보</div>
+    <button class="nav-sub" data-view="std">공통표준</button>
+    <div id="adminSection">
+      <div class="nav-section-label">관리</div>
+      <button class="nav-sub" data-view="users">사용자</button>
+      <button class="nav-sub" data-view="llm">모델 설정</button>
+      <button class="nav-sub" data-view="sys">시스템 정보</button>
+    </div>
+    <button class="nav-tab" data-view="me">내 설정</button>
+  </nav>
+  <div class="side-status" id="status" title="시스템 정보"></div>
+  <div class="user-info">
+    <span class="user-name" id="uName"></span>
+    <span class="badge-role" id="uRole"></span>
+    <button class="btn-logout" id="logoutBtn">로그아웃</button>
+  </div>
+</aside>
+
+<main class="content">
+  <!-- 실행 이력 -->
+  <section class="view active" id="view-runs">
+    <div class="page-title">실행 이력</div>
+    <div class="page-desc">설계 실행 결과를 고르면 ERD, 정의서, 검증 결과, 원문 근거, 사람 검토를 볼 수 있습니다.</div>
+    <div class="runs-layout">
+      <div class="panel run-list" id="runList"><div class="empty">불러오는 중…</div></div>
+      <div id="runDetail"><div class="panel empty">왼쪽에서 실행을 고르거나 <a href="#new">새 설계</a>를 시작하세요.</div></div>
+    </div>
+  </section>
+
+  <!-- 새 설계 -->
+  <section class="view" id="view-new">
+    <div class="page-title">새 설계</div>
+    <div class="warnbox hidden" id="newNoLlm" style="max-width:760px;margin:var(--sp-2) 0;">LLM이 설정되지 않아 설계를 실행할 수 없습니다. 관리자가 <b>관리 → 모델 설정</b>에서 등록해야 합니다.</div>
+    <div class="page-desc">문서를 올리면 섹션별로 엔터티·속성·관계를 추출하고, 공통표준을 적용해 PostgreSQL 스키마를 설계합니다.</div>
+    <div class="panel panel-pad" style="max-width:760px;">
+      <div class="drop" id="drop">
+        <div style="font-size:var(--fs-xl);margin-bottom:4px;">문서를 끌어다 놓거나 클릭해서 고르세요</div>
+        <div class="sub">.md .txt · Docling 설치 시 .pdf .docx · HWP는 아직 지원하지 않음</div>
+        <input type="file" id="fileInput" multiple hidden accept=".md,.markdown,.txt,.pdf,.docx,.pptx,.html,.htm">
+      </div>
+      <div class="file-list" id="fileList"></div>
+      <div style="display:flex;flex-direction:column;gap:var(--sp-3);margin-top:var(--sp-4);">
+        <label class="field">이름 (선택)<input type="text" id="runLabel" placeholder="예: 거래처 규정 베이스라인"></label>
+        <label class="field">모델<select id="runProfile" style="max-width:420px;"></select></label>
+        <div class="warnbox" id="extWarn" style="display:none;">외부 API(Claude)입니다. 올린 문서 내용이 Anthropic으로 전송됩니다. <b>사내 문서는 쓸 수 없고</b>, 공개 문서·테스트 문서에만 씁니다(ADR-0008).</div>
+        <label class="row"><input type="checkbox" id="runSandbox" checked> DDL을 샌드박스 PostgreSQL에서 실행해 검증 (항상 롤백)</label>
+        <label class="row"><input type="checkbox" id="runDebug"> 디버그 모드 — LLM 호출마다 프롬프트·응답·토큰·시간·오류를 남겨 실행 상세의 "LLM 호출" 탭에서 봅니다</label>
+        <label class="row"><input type="checkbox" id="runInternal"> 사내 문서 (보안 구분 internal로 기록)</label>
+        <div class="warnbox" id="internalWarn" style="display:none;">사내 문서는 원문·추출 결과·근거가 시스템 DB와 서버 디스크(data/private/)에 남습니다. 원문과 같은 등급으로 관리해야 하고, 현재 UI에는 로그인이 없습니다.</div>
+        <div class="row"><button class="btn primary" id="startBtn" disabled>설계 시작</button><span class="sub" id="startMsg"></span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 표준 조회 -->
+  <section class="view" id="view-std">
+    <div class="page-title">공통표준</div>
+    <div class="page-desc">행정안전부 공공데이터 공통표준(용어·단어·도메인)입니다. 설계 때 물리명·도메인·타입을 정하는 기준이며(ADR-0005), 판은 <span id="stdVer"></span>입니다.</div>
+    <div class="tabs" id="stdTabs">
+      <button data-std="lookup">이름 → 표준</button>
+      <button data-std="domains">도메인 전체</button>
+      <button data-std="search">용어·단어 검색</button>
+    </div>
+    <div data-std-pane="lookup" class="panel panel-pad" style="max-width:1000px;">
+      <p class="sub" style="margin-bottom:var(--sp-3)">한 줄에 하나씩(또는 쉼표로) 논리명을 넣으면 설계 때와 같은 규칙으로 물리명·도메인·타입을 정합니다.</p>
+      <textarea id="lookupInput" rows="5" style="width:100%;" placeholder="거래처명&#10;주문일자&#10;사업자번호&#10;상품코드"></textarea>
+      <div class="row" style="margin:var(--sp-2) 0 var(--sp-3);">
+        <label class="row"><input type="checkbox" id="lookupEntity"> 엔터티(테이블)명으로</label>
+        <button class="btn primary sm" id="lookupBtn" style="margin-left:auto;">조회</button>
+      </div>
+      <div id="lookupResult"></div>
+    </div>
+    <div data-std-pane="domains" style="display:none;">
+      <p class="sub" style="margin-bottom:var(--sp-3)">공통표준도메인 전체입니다. 용어의 마지막 단어(형식단어)가 도메인 분류를 정하고, 분류 안에서 길이에 맞는 도메인을 고릅니다. <b>nlxpg 타입</b>은 설계에 실제로 쓰는 PostgreSQL 타입이며, 날짜·일시는 ADR-0005에 따라 공통표준과 다릅니다. ★는 길이를 모를 때 쓰는 기본 도메인(그 분류에서 용어가 가장 많이 쓰는 것)입니다.</p>
+      <div class="row" style="margin-bottom:var(--sp-3);">
+        <div class="chips" id="domGroups"></div>
+        <input type="text" id="domFilter" placeholder="분류·도메인명·형식단어로 거르기" style="width:240px;margin-left:auto;">
+        <label class="row sub"><input type="checkbox" id="domAdapted"> nlxpg가 바꾸는 것만</label>
+      </div>
+      <div id="domTable"><div class="empty">불러오는 중…</div></div>
+    </div>
+    <div data-std-pane="search" class="panel panel-pad" style="display:none;">
+      <div class="row" style="margin-bottom:var(--sp-3);">
+        <select id="searchKind"><option value="term">용어</option><option value="word">단어</option><option value="domain">도메인</option></select>
+        <input type="text" id="searchInput" class="grow" placeholder="한글명, 영문약어, 설명">
+        <button class="btn sm" id="searchBtn">검색</button>
+      </div>
+      <div id="searchResult"></div>
+    </div>
+  </section>
+
+  <!-- 표준 검증 -->
+  <section class="view" id="view-check">
+    <div class="page-title">표준 검증</div>
+    <div class="page-desc">기존 스키마의 컬럼을 공통표준과 비교합니다. 컬럼 한글명(COMMENT)이 있으면 한글명으로, 없으면 영문명(약어)으로 표준용어를 찾아 영문명·타입·길이를 대조합니다. 매뉴얼 [표 Ⅲ-2] 비표준 데이터 매핑정보 형식입니다.</div>
+    <div class="panel panel-pad" style="margin-bottom:var(--sp-4);">
+      <div class="tabs" id="checkSrcTabs">
+        <button data-src="ddl" class="active">DDL</button>
+        <button data-src="db">DB 접속</button>
+        <button data-src="run">nlxpg 실행 결과</button>
+      </div>
+      <div data-src-pane="ddl">
+        <textarea id="checkDdl" rows="8" style="width:100%;font-family:var(--mono);font-size:var(--fs-sm);" placeholder="CREATE TABLE ... ; COMMENT ON COLUMN ... IS '거래처명';"></textarea>
+        <div class="row" style="margin-top:var(--sp-2);">
+          <input type="file" id="checkDdlFile" accept=".sql,.txt" hidden>
+          <button class="btn sm" id="checkDdlFileBtn">파일에서 불러오기</button>
+          <span class="sub">샌드박스 스키마에서 실행해 카탈로그로 읽고 롤백합니다. 스키마를 명시한 DDL(public.x)은 인식하지 못합니다.</span>
+        </div>
+      </div>
+      <div data-src-pane="db" style="display:none;">
+        <div class="row">
+          <label class="field grow">접속 문자열<input type="text" id="checkDsn" placeholder="postgresql://user:password@host:5432/db"></label>
+          <label class="field">스키마<input type="text" id="checkSchema" value="public" style="width:140px;"></label>
+        </div>
+        <p class="sub" style="margin-top:var(--sp-2)">카탈로그(컬럼·타입·COMMENT)만 읽습니다. 접속 문자열은 저장하지 않습니다.</p>
+      </div>
+      <div data-src-pane="run" style="display:none;">
+        <select id="checkRun" style="min-width:360px;"></select>
+      </div>
+      <div class="row" style="margin-top:var(--sp-3);"><button class="btn primary" id="checkBtn">검증</button><span class="sub" id="checkMsg"></span></div>
+    </div>
+    <div id="checkResult"></div>
+  </section>
+  <!-- 정규형 검사 -->
+  <section class="view" id="view-nf">
+    <div class="page-title">정규형 검사</div>
+    <div class="page-desc">설계된 스키마를 데이터 없이 이름(공통표준 단어 분해)·FK 관계·값 예시로 검사합니다. pgxnl Design Lab과 달리 데이터로 함수 종속을 확인하지 않으므로, "확인 필요"는 의도적인 중복일 수 있습니다.</div>
+    <div class="panel panel-pad" style="margin-bottom:var(--sp-4);">
+      <div class="row"><label class="field">실행<select id="nfRun" style="min-width:420px;"></select></label>
+        <button class="btn primary" id="nfBtn" style="align-self:flex-end;">검사</button>
+        <a class="sub" id="nfOpen" style="align-self:flex-end;margin-left:auto;"></a></div>
+    </div>
+    <div id="nfResult"></div>
+  </section>
+
+  <!-- 사용자 (관리자) -->
+  <section class="view" id="view-users">
+    <div class="page-title">사용자</div>
+    <div class="page-desc">웹 UI 계정입니다. 관리자는 모든 실행과 사용자·시스템 정보를, 사용자는 자기가 만든 실행만 봅니다. 새 계정과 초기화한 비밀번호는 첫 로그인 때 바꾸게 됩니다.</div>
+    <div class="panel panel-pad" style="margin-bottom:var(--sp-4);max-width:1100px;">
+      <b>사용자 추가</b>
+      <div class="row" style="margin-top:var(--sp-3);align-items:flex-end;">
+        <label class="field">아이디<input type="text" id="nuUser" placeholder="영문·숫자 3~32자" style="width:150px;"></label>
+        <label class="field">이름<input type="text" id="nuName" style="width:130px;"></label>
+        <label class="field">이메일<input type="text" id="nuEmail" style="width:200px;"></label>
+        <label class="field">역할<select id="nuRole"><option value="user">사용자</option><option value="admin">관리자</option></select></label>
+        <label class="field">초기 비밀번호<input type="text" id="nuPass" placeholder="비우면 자동 생성" style="width:160px;"></label>
+        <button class="btn primary" id="nuBtn">추가</button>
+      </div>
+      <div id="nuResult" style="margin-top:var(--sp-3);"></div>
+    </div>
+    <div id="usersTable"></div>
+  </section>
+
+  <!-- 내 설정 -->
+  <section class="view" id="view-me">
+    <div class="page-title">내 설정</div>
+    <div class="page-desc" id="meDesc">이름·이메일과 비밀번호를 바꿉니다.</div>
+    <div class="warnbox hidden" id="mustChange" style="max-width:640px;margin-bottom:var(--sp-4);">처음 로그인했거나 관리자가 비밀번호를 초기화했습니다. 계속하려면 비밀번호를 바꾸세요.</div>
+    <div class="panel panel-pad" style="max-width:640px;margin-bottom:var(--sp-4);" id="profileBox">
+      <b>프로필</b>
+      <div class="row" style="margin-top:var(--sp-3);align-items:flex-end;">
+        <label class="field">아이디<input type="text" id="meUser" disabled style="width:140px;"></label>
+        <label class="field">이름<input type="text" id="meName" style="width:150px;"></label>
+        <label class="field grow">이메일<input type="text" id="meEmail"></label>
+        <button class="btn" id="meSave">저장</button>
+      </div>
+    </div>
+    <div class="panel panel-pad" style="max-width:640px;">
+      <b>비밀번호 변경</b>
+      <div class="row" style="margin-top:var(--sp-3);align-items:flex-end;">
+        <label class="field">현재 비밀번호<input type="password" id="pwCur" autocomplete="current-password" style="width:170px;"></label>
+        <label class="field">새 비밀번호<input type="password" id="pwNew" autocomplete="new-password" style="width:170px;"></label>
+        <label class="field">새 비밀번호 확인<input type="password" id="pwNew2" autocomplete="new-password" style="width:170px;"></label>
+        <button class="btn primary" id="pwBtn">변경</button>
+      </div>
+      <p class="sub" style="margin-top:var(--sp-2);">8자 이상, 숫자와 문자를 섞습니다. 바꾸면 다른 곳의 로그인은 끊깁니다.</p>
+    </div>
+  </section>
+
+  <!-- 모델 설정 (관리자) -->
+  <section class="view" id="view-llm">
+    <div class="page-title">모델 설정</div>
+    <div class="page-desc">LLM 접속 정보를 프로필로 등록하고, 역할마다 쓸 프로필을 고릅니다. 설정은 시스템 DB에만 저장되며 키·비밀번호는 암호화됩니다(.env의 LLM 설정은 쓰지 않습니다).</div>
+    <div class="warnbox hidden" id="llmNeeded" style="margin-bottom:var(--sp-4);"><b>LLM을 먼저 설정하세요.</b> 아래에서 프로필을 하나 추가하면 문서 추출 역할에 바로 지정됩니다.</div>
+    <div class="panel panel-pad" style="margin-bottom:var(--sp-4);">
+      <b>역할</b>
+      <table class="grid" style="margin-top:var(--sp-2);" id="llmRoles"></table>
+    </div>
+    <div class="row" style="margin-bottom:var(--sp-2);"><b class="grow">프로필</b><button class="btn sm primary" id="lpNew">프로필 추가</button></div>
+    <div id="llmProfiles" style="margin-bottom:var(--sp-4);"></div>
+    <div class="panel panel-pad hidden" id="lpForm" style="max-width:980px;">
+      <b id="lpTitle">프로필 추가</b>
+      <div class="row" style="margin-top:var(--sp-3);align-items:flex-end;">
+        <label class="field">제공자<select id="lpProvider"><option value="openai">OpenAI 호환 (vLLM 등)</option><option value="watsonx">watsonx</option><option value="anthropic">Claude (Anthropic, 외부 API)</option></select></label>
+        <label class="field">모델<input type="text" id="lpModel" placeholder="qwen3.6-35b" style="width:220px;"></label>
+        <label class="field grow">주소<input type="text" id="lpUrl" placeholder="https://host:8000/v1"></label>
+      </div>
+      <div class="warnbox hidden" id="lpExtWarn" style="margin-top:var(--sp-3);">외부 API입니다. 문서 내용이 Anthropic으로 전송됩니다. 그래서 문서 추출(기본) 역할에는 지정할 수 없고, 새 설계에서 <b>사내 문서가 아닐 때만</b> 골라 쓸 수 있습니다(ADR-0008). temperature와 구조화 출력 설정은 쓰지 않습니다(항상 json_schema). 역할의 "생각 끄기"는 effort=low로 바뀝니다.</div>
+      <div class="row" style="margin-top:var(--sp-3);align-items:flex-end;">
+        <label class="field">이름<input type="text" id="lpName" placeholder="비우면 제공자/모델" style="width:220px;"></label>
+        <label class="field">구조화 출력<select id="lpGuided"><option value="">제공자 기본값</option><option value="json_schema">json_schema (vLLM guided)</option><option value="json_object">json_object</option><option value="none">none</option></select></label>
+        <label class="field">temperature<input type="number" id="lpTemp" value="0" step="0.1" min="0" max="2" style="width:90px;"></label>
+        <label class="field">max_tokens<input type="number" id="lpMax" value="8192" min="64" style="width:110px;"></label>
+        <label class="row" style="align-self:center;"><input type="checkbox" id="lpVerify" checked> 인증서 검증 (자체서명이면 끔)</label>
+      </div>
+      <div class="row" style="margin-top:var(--sp-3);align-items:flex-end;" id="lpOpenai">
+        <label class="field">API 키<input type="password" id="lpKey" autocomplete="new-password" style="width:300px;"></label>
+      </div>
+      <div class="hidden" id="lpWatsonx">
+        <div class="row" style="margin-top:var(--sp-3);align-items:flex-end;">
+          <label class="field">프로젝트 ID<input type="text" id="lpProject" style="width:300px;"></label>
+          <label class="field">스페이스 ID (프로젝트 대신)<input type="text" id="lpSpace" style="width:240px;"></label>
+          <label class="field">API 버전<input type="text" id="lpVersion" value="2024-05-01" style="width:120px;"></label>
+        </div>
+        <div class="row" style="margin-top:var(--sp-3);align-items:flex-end;">
+          <label class="field">CPD 계정 (IBM Cloud면 비움)<input type="text" id="lpUser" style="width:180px;"></label>
+          <label class="field">비밀번호 (CPD)<input type="password" id="lpPass" autocomplete="new-password" style="width:200px;"></label>
+          <label class="field">API 키<input type="password" id="lpWxKey" autocomplete="new-password" style="width:200px;"></label>
+          <label class="field">instance_id (CPD, 보통 openshift)<input type="text" id="lpInstance" style="width:160px;"></label>
+        </div>
+      </div>
+      <p class="sub" style="margin-top:var(--sp-2);" id="lpSecretNote"></p>
+      <div class="row" style="margin-top:var(--sp-3);"><button class="btn primary" id="lpSave">저장하고 접속 시험</button><button class="btn" id="lpCancel">닫기</button><span class="sub" id="lpMsg"></span></div>
+    </div>
+  </section>
+
+  <!-- 시스템 정보 -->
+  <section class="view" id="view-sys">
+    <div class="page-title">시스템 정보</div>
+    <div class="page-desc">현재 서버 상태입니다. LLM은 <a href="#llm">모델 설정</a>(시스템 DB)에, 시스템 DB 접속과 암호화 키는 서버의 .env에 있습니다. 비밀값은 이 화면에 나오지 않습니다.</div>
+    <div id="sysBody"></div>
+  </section>
+</main>
+</div>
+<div id="toast"></div>
+
+<script src="/static/vendor/mermaid.min.js"></script>
+<script>
+"use strict";
+// ─────────────────────────────────────────────────────────── 공통
+const $ = (s, el = document) => el.querySelector(s);
+const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+let INFO = null;
+
+function toast(msg, isErr = false) {
+  const t = $("#toast");
+  t.textContent = msg; t.className = isErr ? "err" : ""; t.style.display = "block";
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.style.display = "none", isErr ? 7000 : 2500);
+}
+async function api(path, opts = {}) {
+  const res = await fetch(path, opts);
+  if (res.status === 401 && !path.startsWith("/api/auth/")) { showLogin(); throw new Error("로그인이 필요합니다"); }
+  const ct = res.headers.get("content-type") || "";
+  const body = ct.includes("json") ? await res.json() : await res.text();
+  if (!res.ok) throw new Error(typeof body === "object" ? (body.detail ? JSON.stringify(body.detail).replace(/^"|"$/g, "") : JSON.stringify(body)) : body);
+  return body;
+}
+const fmtTime = s => s ? new Date(s).toLocaleString("ko-KR", {month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit"}) : "";
+function duration(a, b) {
+  if (!a || !b) return "";
+  const s = Math.round((new Date(b) - new Date(a)) / 1000);
+  return s < 60 ? `${s}초` : `${Math.floor(s / 60)}분 ${s % 60}초`;
+}
+function download(name, text, type = "text/plain") {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([text], {type}));
+  a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+function csv(rows) {
+  return "﻿" + rows.map(r => r.map(v => { v = String(v ?? ""); return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v; }).join(",")).join("\n");
+}
+
+const STD = {common: ["공통", "b-ok"], composed: ["조합", "b-warn"], nonstandard: ["비표준", "b-err"]};
+function stdBadge(status, notes) {
+  if (!status) return `<span class="badge b-dim" title="모델링이 추가한 컬럼(대리키·FK)">추가</span>`;
+  const [label, cls] = STD[status];
+  return `<span class="badge ${cls}" title="${esc((notes || []).join("\n"))}">${label}</span>`;
+}
+const RUN_STATUS = {running: ["진행 중", "b-info"], succeeded: ["완료", "b-ok"], failed: ["실패", "b-err"]};
+function runBadge(r) {
+  const [l, c] = RUN_STATUS[r.status] || [r.status, "b-dim"];
+  let extra = "";
+  if (r.status === "succeeded") extra = r.ddl_valid === true ? ` <span class="badge b-ok">DDL 통과</span>` : r.ddl_valid === false ? ` <span class="badge b-err">DDL 실패</span>` : "";
+  return `<span class="badge ${c}">${l}</span>${extra}`;
+}
+
+// ─────────────────────────────────────────────────────────── 로그인
+let ME = null;
+function showLogin() {
+  ME = null;
+  $("#app").style.display = "none"; $("#loginScreen").style.display = "flex";
+  setTimeout(() => $("#loginUser").focus(), 0);
+}
+function showApp() {
+  $("#loginScreen").style.display = "none"; $("#app").style.display = "flex";
+  $("#uName").textContent = `${ME.display_name} (${ME.username})`;
+  $("#uRole").textContent = ME.is_admin ? "관리자" : "사용자";
+  $("#adminSection").classList.toggle("hidden", !ME.is_admin);
+  $("#status").classList.toggle("hidden", !ME.is_admin);
+  $$("#nav button").forEach(b => b.disabled = ME.must_change_password && b.dataset.view !== "me");
+}
+async function startApp() {
+  try { ME = await api("/api/auth/me"); }
+  catch { showLogin(); return; }
+  showApp();
+  if (!ME.must_change_password) await loadInfo();
+  route(); nudgeLlm();
+}
+$("#loginForm").onsubmit = async e => {
+  e.preventDefault();
+  $("#loginErr").textContent = "";
+  try {
+    ME = await api("/api/auth/login", {method: "POST", headers: {"content-type": "application/json"},
+      body: JSON.stringify({username: $("#loginUser").value.trim(), password: $("#loginPass").value})});
+    $("#loginPass").value = "";
+    RUNS = []; CUR = null;
+    showApp(); if (!ME.must_change_password) await loadInfo(); route(); nudgeLlm();
+  } catch (err) { $("#loginErr").textContent = err.message; }
+};
+$("#logoutBtn").onclick = async () => {
+  await api("/api/auth/logout", {method: "POST"}).catch(() => {});
+  RUNS = []; CUR = null; showLogin();
+};
+
+// ─────────────────────────────────────────────────────────── 내 설정
+function renderMe() {
+  $("#mustChange").classList.toggle("hidden", !ME.must_change_password);
+  $("#profileBox").classList.toggle("hidden", ME.must_change_password);
+  $("#meUser").value = ME.username; $("#meName").value = ME.display_name; $("#meEmail").value = ME.email || "";
+}
+$("#meSave").onclick = async () => {
+  try {
+    ME = await api("/api/auth/me", {method: "PATCH", headers: {"content-type": "application/json"},
+      body: JSON.stringify({display_name: $("#meName").value.trim(), email: $("#meEmail").value.trim()})});
+    showApp(); toast("저장했습니다");
+  } catch (e) { toast(e.message, true); }
+};
+$("#pwBtn").onclick = async () => {
+  const [cur, n1, n2] = [$("#pwCur").value, $("#pwNew").value, $("#pwNew2").value];
+  if (n1 !== n2) return toast("새 비밀번호가 서로 다릅니다", true);
+  try {
+    await api("/api/auth/password", {method: "POST", headers: {"content-type": "application/json"},
+      body: JSON.stringify({current: cur, new: n1})});
+    ["#pwCur", "#pwNew", "#pwNew2"].forEach(x => $(x).value = "");
+    const wasForced = ME.must_change_password;
+    ME = await api("/api/auth/me"); showApp(); toast("비밀번호를 바꿨습니다");
+    if (wasForced) { await loadInfo(); go("runs"); nudgeLlm(); } else renderMe();
+  } catch (e) { toast(e.message, true); }
+};
+
+// ─────────────────────────────────────────────────────────── 사용자 (관리자)
+function showSecret(el, who, pw) {
+  el.innerHTML = `<div class="warnbox">${esc(who)}의 임시 비밀번호: <span class="secret">${esc(pw)}</span>
+    <button class="btn sm" id="copySecret" style="margin-left:8px;">복사</button>
+    <div style="margin-top:6px;">이 화면을 벗어나면 다시 볼 수 없습니다. 본인에게 전달하세요. 첫 로그인 때 바꾸게 됩니다.</div></div>`;
+  $("#copySecret", el).onclick = () => navigator.clipboard.writeText(pw).then(() => toast("복사했습니다"));
+}
+async function loadUsers() {
+  try {
+    const users = await api("/api/users");
+    $("#usersTable").innerHTML = `<div class="panel" style="overflow:auto;"><table class="grid">
+      <thead><tr><th>아이디</th><th>이름</th><th>이메일</th><th>역할</th><th>상태</th><th class="num">실행</th><th>마지막 로그인</th><th></th></tr></thead><tbody>
+      ${users.map(u => `<tr data-id="${u.user_id}" data-name="${esc(u.username)}">
+        <td><code>${esc(u.username)}</code>${u.user_id === ME.user_id ? ' <span class="badge b-info">나</span>' : ""}</td>
+        <td>${esc(u.display_name)}</td><td>${esc(u.email || "")}</td>
+        <td><select class="uRole"><option value="user" ${u.role === "user" ? "selected" : ""}>사용자</option><option value="admin" ${u.role === "admin" ? "selected" : ""}>관리자</option></select></td>
+        <td>${u.enabled ? '<span class="badge b-ok">사용</span>' : '<span class="badge b-dim">사용 중지</span>'}${u.must_change_password ? ' <span class="badge b-warn">비밀번호 변경 대기</span>' : ""}</td>
+        <td class="num">${u.run_count}</td><td>${u.last_login_at ? fmtTime(u.last_login_at) : '<span class="sub">-</span>'}</td>
+        <td style="white-space:nowrap;"><button class="btn sm uToggle">${u.enabled ? "사용 중지" : "사용"}</button>
+          <button class="btn sm uReset">비밀번호 초기화</button></td></tr>
+        <tr class="uSecret hidden"><td colspan="8"></td></tr>`).join("")}
+      </tbody></table></div>`;
+    $$("#usersTable tr[data-id]").forEach(tr => {
+      const id = +tr.dataset.id, name = tr.dataset.name, patch = async body => {
+        try { await api(`/api/users/${id}`, {method: "PATCH", headers: {"content-type": "application/json"}, body: JSON.stringify(body)}); toast("바꿨습니다"); }
+        catch (e) { toast(e.message, true); }
+        loadUsers();
+      };
+      $(".uRole", tr).onchange = e => patch({role: e.target.value});
+      $(".uToggle", tr).onclick = () => {
+        const off = $(".uToggle", tr).textContent === "사용 중지";
+        if (off && !confirm(`${name} 계정을 사용 중지합니다. 로그인 중이면 바로 끊깁니다.`)) return;
+        patch({enabled: !off});
+      };
+      $(".uReset", tr).onclick = async () => {
+        const typed = prompt(`${name}의 비밀번호를 초기화합니다.\n새 비밀번호를 넣거나, 비워 두면 임시 비밀번호를 만듭니다.\n(어느 쪽이든 다음 로그인 때 바꾸게 됩니다)`, "");
+        if (typed === null) return;
+        try {
+          const res = await api(`/api/users/${id}/reset-password`, {method: "POST", headers: {"content-type": "application/json"}, body: JSON.stringify({password: typed || null})});
+          const row = tr.nextElementSibling; row.classList.remove("hidden");
+          if (res.temp_password) showSecret($("td", row), name, res.temp_password);
+          else $("td", row).innerHTML = `<div class="sub">${esc(name)}의 비밀번호를 바꿨습니다. 다음 로그인 때 바꾸게 됩니다.</div>`;
+        } catch (e) { toast(e.message, true); }
+      };
+    });
+  } catch (e) { $("#usersTable").innerHTML = `<div class="err-box">${esc(e.message)}</div>`; }
+}
+$("#nuBtn").onclick = async () => {
+  const body = {username: $("#nuUser").value.trim(), display_name: $("#nuName").value.trim() || $("#nuUser").value.trim(),
+                email: $("#nuEmail").value.trim() || null, role: $("#nuRole").value, password: $("#nuPass").value || null};
+  try {
+    const res = await api("/api/users", {method: "POST", headers: {"content-type": "application/json"}, body: JSON.stringify(body)});
+    ["#nuUser", "#nuName", "#nuEmail", "#nuPass"].forEach(x => $(x).value = "");
+    if (res.temp_password) showSecret($("#nuResult"), res.user.username, res.temp_password);
+    else $("#nuResult").innerHTML = `<div class="sub">${esc(res.user.username)}을(를) 만들었습니다. 첫 로그인 때 비밀번호를 바꾸게 됩니다.</div>`;
+    loadUsers();
+  } catch (e) { toast(e.message, true); }
+};
+
+// ─────────────────────────────────────────────────────────── 라우팅
+// #runs/12/erd · #new · #std · #check · #nf/12 · #sys
+function go(hash) { if (location.hash !== "#" + hash) location.hash = hash; else route(); }
+function route() {
+  if (!ME) return;
+  let [view, id, tab] = (location.hash.slice(1) || "runs").split("/");
+  if (ME.must_change_password && view !== "me") { history.replaceState(null, "", "#me"); view = "me"; }
+  if (["users", "sys", "llm"].includes(view) && !ME.is_admin) { history.replaceState(null, "", "#runs"); view = "runs"; }
+  $$("#nav button").forEach(b => b.classList.toggle("active", b.dataset.view === view));
+  $$(".view").forEach(v => v.classList.toggle("active", v.id === "view-" + view));
+  if (view === "runs") { loadRuns(); if (id) openRun(+id, tab || "summary"); }
+  if (view === "check") loadCheckRuns();
+  if (view === "nf") loadNf(id ? +id : null);
+  if (view === "std") showStdTab(id || "lookup");
+  if (view === "sys") loadInfo().then(renderSys);  // 열 때마다 새로 읽는다(모델 설정을 바꾼 뒤에도 최신)
+  if (view === "users") loadUsers();
+  if (view === "me") renderMe();
+  if (view === "llm") loadLlm();
+  if (view === "new") { $("#newNoLlm").classList.toggle("hidden", !INFO || INFO.llm_configured); loadChoices(); }
+}
+$$("#nav button").forEach(b => b.onclick = () => go(b.dataset.view));
+window.addEventListener("hashchange", route);
+
+async function loadInfo() {
+  try {
+    INFO = await api("/api/info");
+    $("#status").innerHTML =
+      `<div title="문서 추출 LLM"><span class="dot ${INFO.llm ? "ok" : "err"}"></span>${esc(INFO.llm ? INFO.llm.model : "LLM 미설정")}</div>` +
+      `<div title="공통표준 판"><span class="dot ${INFO.standards_version ? "ok" : "err"}"></span>공통표준 ${esc(INFO.standards_version || "없음")}</div>` +
+      `<div title="${esc(INFO.db_error || INFO.system_db)}"><span class="dot ${INFO.db_ok ? "ok" : "err"}"></span>시스템 DB</div>`;
+    $("#stdVer").textContent = INFO.standards_version || "없음";
+    if ((location.hash.slice(1) || "").startsWith("sys")) renderSys();
+  } catch (e) { toast("서버 정보를 못 읽었습니다: " + e.message, true); }
+}
+$("#status").onclick = () => go("sys");
+
+// 처음 접속했는데 LLM이 없으면: 관리자는 모델 설정으로, 사용자는 새 설계 화면에 안내
+function nudgeLlm() {
+  if (!INFO || INFO.llm_configured || ME.must_change_password) return;
+  if (ME.is_admin) { go("llm"); $("#llmNeeded").classList.remove("hidden"); }
+  else toast("LLM이 설정되지 않았습니다. 관리자에게 모델 설정을 요청하세요.", true);
+}
+
+// ─────────────────────────────────────────────────────────── 모델 설정 (관리자)
+let LLM = null, LP_EDIT = null;
+async function loadLlm() {
+  try { LLM = await api("/api/llm/profiles"); } catch (e) { $("#llmProfiles").innerHTML = `<div class="err-box">${esc(e.message)}</div>`; return; }
+  const ext = p => p.provider === "anthropic";
+  const opts = (sel, withSame) => (withSame ? `<option value="">(문서 추출과 같음)</option>` : `<option value="">(지정 안 함)</option>`) +
+    LLM.profiles.map(p => `<option value="${p.profile_id}" ${sel === p.profile_id ? "selected" : ""} ${!withSame && ext(p) ? "disabled" : ""}>${esc(p.name)}${ext(p) ? " (외부 API)" : ""}</option>`).join("");
+  $("#llmRoles").innerHTML = Object.entries(LLM.role_names).map(([role, label]) => {
+    const r = LLM.roles[role];
+    return `<tr data-role="${role}"><th style="width:180px;background:none;">${esc(label)}</th>
+      <td><select class="rSel" style="min-width:280px;">${opts(r ? r.profile_id : null, role === "testdoc")}</select>
+      <label class="row" style="display:inline-flex;margin-left:var(--sp-3);"><input type="checkbox" class="rThink" ${r && r.disable_thinking ? "checked" : ""}> 생각 끄기 (Qwen3 등 reasoning 모델)</label>
+      ${role === "extract" && !r ? ' <span class="badge b-err">필수</span>' : ""}</td></tr>`;
+  }).join("");
+  $$("#llmRoles tr").forEach(tr => {
+    const save = async () => {
+      const v = $(".rSel", tr).value;
+      try {
+        await api(`/api/llm/roles/${tr.dataset.role}`, {method: "PUT", headers: {"content-type": "application/json"},
+          body: JSON.stringify({profile_id: v ? +v : null, disable_thinking: $(".rThink", tr).checked})});
+        toast("역할을 바꿨습니다"); await loadInfo(); loadLlm();
+      } catch (e) { toast(e.message, true); }
+    };
+    $(".rSel", tr).onchange = save; $(".rThink", tr).onchange = save;
+  });
+  $("#llmProfiles").innerHTML = LLM.profiles.length ? `<div class="panel" style="overflow:auto;"><table class="grid">
+    <thead><tr><th>이름</th><th>제공자</th><th>모델</th><th>주소</th><th>인증서</th><th>키</th><th>역할</th><th></th></tr></thead><tbody>
+    ${LLM.profiles.map(p => `<tr data-id="${p.profile_id}"><td><b>${esc(p.name)}</b></td><td>${esc(p.provider)}${p.provider === "anthropic" ? ' <span class="badge b-warn">외부 API</span>' : ""}</td><td class="mono">${esc(p.model)}</td>
+      <td class="sub">${esc(p.base_url)}</td><td>${p.verify_ssl ? "검증" : '<span class="badge b-warn">검증 안 함</span>'}</td>
+      <td>${p.has_api_key || p.has_password ? '<span class="badge b-ok">저장됨</span>' : '<span class="badge b-dim">없음</span>'}</td>
+      <td>${p.roles.map(r => `<span class="badge b-info">${esc(LLM.role_names[r])}</span>`).join(" ")}</td>
+      <td style="white-space:nowrap;"><button class="btn sm pTest">접속 시험</button> <button class="btn sm pEdit">수정</button> <button class="btn sm danger pDel">삭제</button></td></tr>
+      <tr class="pResult hidden"><td colspan="8"></td></tr>`).join("")}
+    </tbody></table></div>` : `<div class="panel empty">등록된 프로필이 없습니다. "프로필 추가"를 누르세요.</div>`;
+  $$("#llmProfiles tr[data-id]").forEach(tr => {
+    const id = +tr.dataset.id, prof = LLM.profiles.find(p => p.profile_id === id);
+    $(".pTest", tr).onclick = () => testProfile(id, tr.nextElementSibling);
+    $(".pEdit", tr).onclick = () => openProfileForm(prof);
+    $(".pDel", tr).onclick = async () => {
+      if (!confirm(`프로필 '${prof.name}'을(를) 지웁니다.${prof.roles.length ? " 이 프로필을 쓰는 역할도 해제됩니다." : ""}`)) return;
+      try { await api(`/api/llm/profiles/${id}`, {method: "DELETE"}); toast("지웠습니다"); await loadInfo(); loadLlm(); } catch (e) { toast(e.message, true); }
+    };
+  });
+  if (!LLM.profiles.length && $("#lpForm").classList.contains("hidden")) openProfileForm(null);
+}
+async function testProfile(id, row) {
+  row.classList.remove("hidden");
+  $("td", row).innerHTML = `<span class="sub">LLM을 호출하는 중…</span>`;
+  try {
+    const r = await api(`/api/llm/profiles/${id}/test`, {method: "POST"});
+    $("td", row).innerHTML = r.ok
+      ? `<span class="badge b-ok">성공</span> <span class="sub">${r.seconds}초 · 구조화 출력 ${esc(r.guided_mode)} · 응답 ${esc(r.answer)}</span>`
+      : `<span class="badge b-err">실패</span><div class="err-box" style="margin-top:4px;">${esc(r.error)}</div>`;
+  } catch (e) { $("td", row).innerHTML = `<div class="err-box">${esc(e.message)}</div>`; }
+}
+function syncProviderFields() {
+  const prov = $("#lpProvider").value, wx = prov === "watsonx", ext = prov === "anthropic";
+  $("#lpWatsonx").classList.toggle("hidden", !wx); $("#lpOpenai").classList.toggle("hidden", wx);
+  $("#lpExtWarn").classList.toggle("hidden", !ext);
+  $("#lpUrl").placeholder = wx ? "https://cpd-host/ 또는 https://us-south.ml.cloud.ibm.com" : ext ? "https://api.anthropic.com" : "https://host:8000/v1";
+  $("#lpModel").placeholder = wx ? "openai/gpt-oss-120b" : ext ? "claude-opus-5-5" : "qwen3.6-35b";
+}
+function openProfileForm(p) {
+  LP_EDIT = p ? p.profile_id : null;
+  $("#lpTitle").textContent = p ? `프로필 수정: ${p.name}` : "프로필 추가";
+  $("#lpProvider").value = p ? p.provider : "openai";
+  $("#lpModel").value = p ? p.model : ""; $("#lpUrl").value = p ? p.base_url : ""; $("#lpName").value = p ? p.name : "";
+  $("#lpGuided").value = p && p.guided_mode ? p.guided_mode : ""; $("#lpTemp").value = p ? p.temperature : 0;
+  $("#lpMax").value = p ? p.max_tokens : 8192; $("#lpVerify").checked = p ? p.verify_ssl : true;
+  $("#lpProject").value = p?.watsonx_project_id || ""; $("#lpSpace").value = p?.watsonx_space_id || "";
+  $("#lpUser").value = p?.watsonx_username || ""; $("#lpInstance").value = p?.watsonx_instance_id || "";
+  $("#lpVersion").value = p?.watsonx_api_version || "2024-05-01";
+  ["#lpKey", "#lpPass", "#lpWxKey"].forEach(x => { $(x).value = ""; $(x).placeholder = p && (p.has_api_key || p.has_password) ? "비우면 기존 값 유지" : ""; });
+  $("#lpSecretNote").textContent = p ? "키·비밀번호는 비워 두면 저장된 값을 그대로 씁니다. 화면에 다시 표시되지 않습니다." : "키·비밀번호는 암호화해 저장하고 화면에 다시 표시하지 않습니다.";
+  $("#lpMsg").textContent = "";
+  syncProviderFields(); $("#lpForm").classList.remove("hidden"); $("#lpModel").focus();
+}
+$("#lpProvider").onchange = () => {
+  if ($("#lpProvider").value === "anthropic" && !LP_EDIT) {  // 새 Claude 프로필은 기본값을 채운다
+    if (!$("#lpUrl").value.trim()) $("#lpUrl").value = "https://api.anthropic.com";
+    if (!$("#lpModel").value.trim()) $("#lpModel").value = "claude-opus-5-5";
+    if (+$("#lpMax").value === 8192) $("#lpMax").value = 32000;
+  }
+  syncProviderFields();
+};
+$("#lpNew").onclick = () => openProfileForm(null);
+$("#lpCancel").onclick = () => $("#lpForm").classList.add("hidden");
+$("#lpSave").onclick = async () => {
+  const wx = $("#lpProvider").value === "watsonx", v = x => $(x).value.trim();
+  const body = {
+    name: v("#lpName") || `${$("#lpProvider").value}/${v("#lpModel")}`, provider: $("#lpProvider").value,
+    model: v("#lpModel"), base_url: v("#lpUrl"), temperature: +$("#lpTemp").value, max_tokens: +$("#lpMax").value,
+    verify_ssl: $("#lpVerify").checked, guided_mode: $("#lpGuided").value || null,
+    api_key: (wx ? $("#lpWxKey").value : $("#lpKey").value) || (LP_EDIT ? null : ""),
+    password: wx ? ($("#lpPass").value || (LP_EDIT ? null : "")) : (LP_EDIT ? null : ""),
+    watsonx_project_id: wx ? v("#lpProject") || null : null, watsonx_space_id: wx ? v("#lpSpace") || null : null,
+    watsonx_username: wx ? v("#lpUser") || null : null, watsonx_instance_id: wx ? v("#lpInstance") || null : null,
+    watsonx_api_version: v("#lpVersion") || "2024-05-01",
+  };
+  if (!body.model || !body.base_url) return toast("모델과 주소를 넣으세요", true);
+  $("#lpMsg").textContent = "저장하는 중…";
+  try {
+    const r = await api(LP_EDIT ? `/api/llm/profiles/${LP_EDIT}` : "/api/llm/profiles",
+      {method: LP_EDIT ? "PUT" : "POST", headers: {"content-type": "application/json"}, body: JSON.stringify(body)});
+    $("#lpForm").classList.add("hidden"); $("#llmNeeded").classList.add("hidden");
+    await loadInfo(); await loadLlm();
+    const tr = $(`#llmProfiles tr[data-id="${r.profile_id}"]`);
+    if (tr) testProfile(r.profile_id, tr.nextElementSibling);
+  } catch (e) { $("#lpMsg").textContent = ""; toast(e.message, true); }
+};
+
+function renderSys() {
+  if (!INFO) { $("#sysBody").innerHTML = `<div class="empty">불러오는 중…</div>`; return; }
+  const i = INFO, row = (k, v) => `<tr><th style="width:200px;background:none;">${k}</th><td>${v}</td></tr>`;
+  const llm = l => l ? `<b>${esc(l.profile)}</b> <span class="sub">${esc(l.provider)} · ${esc(l.model)}${l.disable_thinking ? " · 생각 끄기" : ""}</span>` : `<span class="badge b-err">미설정</span>`;
+  const card = (title, rows) => `<div class="panel" style="margin-bottom:var(--sp-4);"><div class="panel-pad" style="padding-bottom:0;"><b>${title}</b></div><table class="grid" style="margin-top:var(--sp-2);">${rows}</table></div>`;
+  $("#sysBody").innerHTML =
+    card(`LLM <a href="#llm" class="sub" style="font-weight:400;margin-left:8px;">모델 설정 →</a>`,
+      row("문서 추출", llm(i.llm)) +
+      row("테스트 문서 작성", i.testdoc_llm ? llm(i.testdoc_llm) : `<span class="sub">문서 추출과 같음</span>`) +
+      "") +
+    card("공통표준 (ADR-0005)",
+      row("판", esc(i.standards_version || "없음") + (i.apply_standards ? "" : ` <span class="badge b-warn">설계에 미적용</span>`)) +
+      (i.standards ? row("건수", `용어 ${i.standards.terms.toLocaleString()} · 단어 ${i.standards.words.toLocaleString()} · 도메인 ${i.standards.domains}`) + row("위치", `<code>${esc(i.standards.dir)}</code>`) : "")) +
+    card("데이터베이스",
+      row("시스템 DB", `<span class="dot ${i.db_ok ? "ok" : "err"}" style="display:inline-block"></span> <code>${esc(i.system_db)}</code>${i.db_error ? `<div class="err-box" style="margin-top:4px">${esc(i.db_error)}</div>` : ""}`) +
+      row("샌드박스", i.sandbox ? `<code>${esc(i.sandbox_db)}</code><div class="note">임시 스키마에서 DDL을 실행하고 항상 롤백</div>` : "없음")) +
+    card("서버",
+      row("nlxpg", esc(i.version)) + row("설정 파일", `<code>${esc(i.env_file)}</code> <span class="sub">시스템 DB 접속, 암호화 키</span>`) +
+      row("라이선스", `Apache-2.0 · 서드파티 고지는 THIRD_PARTY_NOTICES.md`));
+}
+
+// ─────────────────────────────────────────────────────────── 정규형 검사
+async function loadNf(id) {
+  try {
+    const runs = (RUNS.length ? RUNS : (RUNS = await api("/api/runs"))).filter(r => r.table_count);
+    $("#nfRun").innerHTML = runs.map(r => `<option value="${r.run_id}">#${r.run_id} ${esc(r.label || r.documents.join(", "))} (테이블 ${r.table_count})</option>`).join("");
+    if (id) $("#nfRun").value = id;
+  } catch (e) { $("#nfRun").innerHTML = `<option value="">시스템 DB에 연결되지 않음</option>`; return; }
+  if (id) runNf();
+}
+async function runNf() {
+  const id = +$("#nfRun").value;
+  if (!id) return;
+  if (location.hash !== `#nf/${id}`) history.replaceState(null, "", `#nf/${id}`);
+  $("#nfOpen").innerHTML = `<a href="#runs/${id}/tables">실행 #${id} 정의서 보기 →</a>`;
+  try {
+    const r = await api(`/api/runs/${id}`), nf = r.normal_forms || [];
+    const by = k => nf.filter(f => f.normal_form === k).length, viol = nf.filter(f => f.level === "violation").length;
+    $("#nfResult").innerHTML = `<div class="cards">
+        <div class="card"><div class="k">위반</div><div class="v" style="color:${viol ? "var(--err)" : "inherit"}">${viol}</div></div>
+        <div class="card"><div class="k">확인 필요</div><div class="v">${nf.length - viol}</div></div>
+        ${["1NF", "2NF", "3NF", "관계", "파생"].map(k => `<div class="card"><div class="k">${k}</div><div class="v">${by(k)}</div></div>`).join("")}
+      </div>${nfTable(nf)}`;
+  } catch (e) { $("#nfResult").innerHTML = `<div class="err-box">${esc(e.message)}</div>`; }
+}
+$("#nfBtn").onclick = runNf;
+$("#nfRun").onchange = runNf;
+
+function nfTable(nf) {
+  if (!nf.length) return `<div class="panel empty">정규형 지적 사항이 없습니다.</div>`;
+  return `<table class="grid panel" style="table-layout:fixed;margin-bottom:var(--sp-5);">
+    <colgroup><col style="width:92px"><col style="width:22%"><col style="width:16%"><col><col style="width:30%"></colgroup>
+    <thead><tr><th>판정</th><th>항목</th><th>대상</th><th>내용</th><th>제안</th></tr></thead><tbody>
+    ${nf.map(f => `<tr><td><span class="badge ${f.level === "violation" ? "b-err" : "b-warn"}">${f.level === "violation" ? "위반" : "확인"}</span> <span class="badge b-dim">${esc(f.normal_form)}</span></td>
+      <td>${esc(f.title)}</td><td><code>${esc(f.table)}.${esc(f.columns.join(", "))}</code></td>
+      <td>${esc(f.detail)}</td><td class="sub">${esc(f.suggestion)}</td></tr>`).join("")}
+  </tbody></table>`;
+}
+
+// ─────────────────────────────────────────────────────────── 실행 이력
+let RUNS = [], CUR = null, POLL = null;
+
+async function loadRuns() {
+  try { RUNS = await api("/api/runs"); }
+  catch (e) { $("#runList").innerHTML = `<div class="empty">${esc(e.message)}</div>`; return; }
+  if (!RUNS.length) { $("#runList").innerHTML = `<div class="empty">아직 실행이 없습니다.<br><a href="#new">새 설계</a></div>`; return; }
+  $("#runList").innerHTML = RUNS.map(r => `
+    <div class="run-item ${CUR && CUR.run_id === r.run_id ? "active" : ""}" data-id="${r.run_id}">
+      <div class="t"><span class="id">#${r.run_id}</span><span class="grow" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(r.label || r.documents.join(", ") || "이름 없음")}</span></div>
+      <div class="m">${runBadge(r)} ${r.table_count ? `테이블 ${r.table_count}` : ""} ${r.review_count ? `· 검토 ${r.review_count}` : ""}</div>
+      <div class="m">${esc(r.documents.join(", "))} · ${fmtTime(r.started_at)}${ME.is_admin ? ` · ${esc(r.created_by_name || "(사용자 도입 전)")}` : ""}</div>
+    </div>`).join("");
+  $$(".run-item").forEach(el => el.onclick = () => go(`runs/${el.dataset.id}`));
+}
+
+async function openRun(id, tab) {
+  clearTimeout(POLL);
+  try { CUR = await api(`/api/runs/${id}`); }
+  catch (e) { $("#runDetail").innerHTML = `<div class="panel empty">${esc(e.message)}</div>`; return; }
+  $$(".run-item").forEach(el => el.classList.toggle("active", +el.dataset.id === id));
+  renderRun(tab);
+  if (CUR.status === "running" && CUR.progress && !CUR.progress.finished) POLL = setTimeout(() => openRun(id, currentTab()), 2000);
+  else if (CUR.status === "running" && CUR.progress && CUR.progress.finished) POLL = setTimeout(() => { loadRuns(); openRun(id, currentTab()); }, 800);
+}
+const currentTab = () => ($("#runTabs button.active") || {}).dataset?.tab || "summary";
+
+async function deleteRun(r) {
+  const name = r.label || "실행 #" + r.run_id;
+  const msg = `'${name}' (#${r.run_id})을(를) 지웁니다.\n\n` +
+    `함께 지워지는 것: 검토 점수, 이 실행만 쓰던 원문 문서와 업로드 파일\n` +
+    `다른 실행이 같은 문서를 쓰고 있으면 문서는 남깁니다.\n\n되돌릴 수 없습니다. 계속할까요?`;
+  if (!confirm(msg)) return;
+  try {
+    const res = await api(`/api/runs/${r.run_id}`, {method: "DELETE"});
+    toast(`#${r.run_id} 삭제 — 검토 ${res.reviews}건, 문서 ${res.deleted_documents.length}개 삭제` +
+          (res.kept_documents.length ? `, ${res.kept_documents.length}개는 다른 실행이 써서 유지` : ""));
+    CUR = null; RUNS = [];
+    $("#runDetail").innerHTML = `<div class="panel empty">왼쪽에서 실행을 고르거나 <a href="#new">새 설계</a>를 시작하세요.</div>`;
+    go("runs");
+  } catch (e) { toast(e.message, true); }
+}
+
+function renderRun(tab) {
+  const r = CUR, ir = r.schema_ir;
+  const docs = r.documents.map(d => `${esc(d.title)}${d.classification === "internal" ? ' <span class="badge b-err">사내</span>' : ""}`).join(", ");
+  const head = `
+    <div class="detail-head">
+      <div class="grow">
+        <h2>${esc(r.label || "실행 #" + r.run_id)} <span class="sub">#${r.run_id}</span></h2>
+        <div class="sub" style="margin-top:4px;">${docs} · ${esc(r.llm_model || "")}${(r.config || {}).external_api ? ' <span class="badge b-warn">외부 API</span>' : ""} · 공통표준 ${esc((r.config || {}).standards_version || "미적용")} · ${fmtTime(r.started_at)} ${r.finished_at ? "(" + duration(r.started_at, r.finished_at) + ")" : ""}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:var(--sp-2);">
+        <div>${runBadge(r)}</div>
+        <button class="btn sm danger" id="runDelete" ${r.status === "running" ? "disabled title=\"진행 중인 실행은 지울 수 없습니다\"" : ""}>삭제</button>
+      </div>
+    </div>`;
+  if (!ir) {
+    $("#runDetail").innerHTML = `<div class="panel panel-pad">${head}${r.status === "running" ? progressHtml(r.progress) : ""}${r.error ? `<div class="err-box">${esc(r.error)}</div>` : ""}
+      ${(r.config || {}).debug ? `<h3 style="margin:var(--sp-4) 0 var(--sp-2);">LLM 호출 (디버그)</h3><div id="runCalls"></div>` : ""}</div>`;
+    $("#runDelete").onclick = () => deleteRun(r);
+    if ((r.config || {}).debug) renderCalls($("#runCalls"));
+    return;
+  }
+  const nCols = ir.entities.reduce((a, e) => a + e.attributes.length, 0);
+  const lint = (r.validation || {}).lint || [];
+  const tabs = [["summary", "요약"], ["erd", "ERD"], ["tables", "정의서", ir.entities.length], ["rels", "관계", ir.relationships.length],
+                ["valid", "검증", lint.length + (r.normal_forms || []).length], ["ddl", "DDL"], ["docs", "원문"], ["review", "검토"]];
+  if ((r.config || {}).debug) tabs.push(["calls", "LLM 호출"]);
+  $("#runDetail").innerHTML = `<div class="panel panel-pad">${head}
+    <div class="tabs" id="runTabs">${tabs.map(([k, l, n]) => `<button data-tab="${k}">${l}${n != null ? `<span class="cnt">${n}</span>` : ""}</button>`).join("")}</div>
+    <div id="runTab"></div></div>`;
+  $$("#runTabs button").forEach(b => b.onclick = () => go(`runs/${r.run_id}/${b.dataset.tab}`));
+  $("#runDelete").onclick = () => deleteRun(r);
+  showTab(tab, nCols);
+}
+
+function showTab(tab, nCols) {
+  if (!$(`#runTabs button[data-tab="${tab}"]`)) tab = "summary";
+  $$("#runTabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
+  const el = $("#runTab"), r = CUR, ir = r.schema_ir;
+  ({summary: () => renderSummary(el, ir, nCols), erd: () => renderErd(el), tables: () => renderTables(el, ir),
+    rels: () => renderRels(el, ir), valid: () => renderValid(el), ddl: () => renderDdl(el),
+    docs: () => renderDocs(el), review: () => renderReview(el), calls: () => renderCalls(el)})[tab]();
+}
+
+// ── 디버그: LLM 호출 기록
+const CALLS_OPEN = new Set();  // 진행 중 다시 그려도 펼친 호출을 유지한다
+async function renderCalls(el) {
+  const runId = CUR.run_id;
+  if (!el.innerHTML) el.innerHTML = `<div class="empty">불러오는 중…</div>`;
+  let calls;
+  try { calls = await api(`/api/runs/${runId}/llm-calls`); } catch (e) { el.innerHTML = `<div class="err-box">${esc(e.message)}</div>`; return; }
+  if (!CUR || CUR.run_id !== runId) return;
+  if (!calls.length) { el.innerHTML = `<div class="empty">기록된 호출이 없습니다${CUR.status === "running" ? " (첫 응답을 기다리는 중)" : ""}.</div>`; return; }
+  const sum = (k) => calls.reduce((a, c) => a + (c[k] || 0), 0);
+  const errs = calls.filter(c => c.error).length, cut = calls.filter(c => c.finish_reason === "length" || c.finish_reason === "max_tokens").length;
+  const pretty = s => { try { return JSON.stringify(JSON.parse(s), null, 2); } catch { return s || ""; } };
+  el.innerHTML = `
+    <div class="row" style="margin-bottom:var(--sp-3);">
+      <span class="grow">호출 <b>${calls.length}</b> · 오류 <b>${errs}</b>${cut ? ` · <span class="badge b-warn">잘림 ${cut}</span>` : ""} · 입력 ${sum("input_tokens").toLocaleString()} / 출력 ${sum("output_tokens").toLocaleString()} 토큰 · 호출 시간 합계 ${(sum("duration_ms") / 1000).toFixed(1)}초</span>
+      <button class="btn sm" id="callsDl">JSON 저장</button>
+    </div>
+    <div class="panel" style="overflow:auto;"><table class="grid">
+      <thead><tr><th>#</th><th>위치</th><th>시도</th><th>결과</th><th>종료</th><th>토큰(입력/출력)</th><th>시간</th></tr></thead><tbody>
+      ${calls.map((c, i) => `<tr class="call-row clickable" data-id="${c.call_id}" style="cursor:pointer;">
+        <td>${i + 1}</td><td>${esc(c.label || c.schema_name || "")}</td><td>${c.attempt ? `<span class="badge b-warn">수정 ${c.attempt}</span>` : "첫 요청"}</td>
+        <td>${c.error ? `<span class="badge b-err">${c.error.startsWith("검증 실패") ? "검증 실패" : "오류"}</span>` : '<span class="badge b-ok">성공</span>'}</td>
+        <td class="sub">${esc(c.finish_reason || "")}</td><td class="mono">${c.input_tokens ?? "-"} / ${c.output_tokens ?? "-"}</td>
+        <td class="mono">${c.duration_ms != null ? (c.duration_ms / 1000).toFixed(1) + "초" : "-"}</td></tr>
+        <tr class="call-detail hidden" data-for="${c.call_id}"><td colspan="7">
+          ${c.error ? `<div class="err-box" style="margin-bottom:var(--sp-2);white-space:pre-wrap;">${esc(c.error)}</div>` : ""}
+          <details><summary class="sub">시스템 프롬프트 (${(c.system_prompt || "").length.toLocaleString()}자)</summary><pre class="code">${esc(c.system_prompt || "")}</pre></details>
+          ${(c.messages || []).map(m => `<details ${m === c.messages[c.messages.length - 1] ? "open" : ""}><summary class="sub">${esc(m.role)} (${(m.content || "").length.toLocaleString()}자)</summary><pre class="code" style="max-height:320px;overflow:auto;">${esc(m.content)}</pre></details>`).join("")}
+          <details open><summary class="sub">응답 (${(c.response || "").length.toLocaleString()}자) · 모델 ${esc(c.model || "")}</summary><pre class="code" style="max-height:480px;overflow:auto;">${esc(pretty(c.response))}</pre></details>
+        </td></tr>`).join("")}
+      </tbody></table></div>`;
+  const toggle = (id, on) => { const row = $(`.call-row[data-id="${id}"]`, el); if (!row) return;
+    row.classList.toggle("open", on); $(`.call-detail[data-for="${id}"]`, el).classList.toggle("hidden", !on);
+    on ? CALLS_OPEN.add(id) : CALLS_OPEN.delete(id); };
+  $$(".call-row", el).forEach(tr => tr.onclick = () => toggle(tr.dataset.id, !tr.classList.contains("open")));
+  [...CALLS_OPEN].forEach(id => toggle(id, true));
+  $("#callsDl").onclick = () => download(`nlxpg_run${runId}_llm_calls.json`, JSON.stringify(calls, null, 2), "application/json");
+}
+
+function progressHtml(p) {
+  if (!p) return `<p class="sub progress">진행 정보가 없습니다(서버가 재시작됐거나 CLI로 실행 중).</p>`;
+  const docs = Object.values(p.docs || {});
+  const done = docs.reduce((a, d) => a + d.done, 0), total = docs.reduce((a, d) => a + d.total, 0);
+  const order = ["extract", "design", "sandbox", "done"], cur = order.indexOf(p.stage);
+  const step = (k, l) => { const i = order.indexOf(k); return `<span class="${i < cur ? "done" : i === cur ? "on" : ""}">${l}</span>`; };
+  return `<div class="progress">
+    <div class="row"><b>섹션 추출</b><span class="sub">${done} / ${total || "?"}</span><span class="sub grow" style="text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(p.last_section || "")}</span></div>
+    <div class="pbar"><div style="width:${total ? Math.round(done / total * 100) : 3}%"></div></div>
+    <div class="steps">${step("extract", "1. 추출")}${step("design", "2. 정합·모델링·표준")}${step("sandbox", "3. 샌드박스")}${step("done", "완료")}</div>
+    ${p.error ? `<div class="err-box" style="margin-top:var(--sp-3)">${esc(p.error)}</div>` : ""}</div>`;
+}
+
+function stdCounts(ir) {
+  const c = {common: 0, composed: 0, nonstandard: 0, added: 0};
+  ir.entities.forEach(e => e.attributes.forEach(a => c[a.standard || "added"]++));
+  return c;
+}
+function renderSummary(el, ir, nCols) {
+  const r = CUR, v = r.validation || {}, lint = v.lint || [], sb = v.sandbox;
+  const c = stdCounts(ir), tot = nCols || 1;
+  const errs = lint.filter(i => i.level === "error").length, warns = lint.length - errs;
+  const seg = (n, color) => n ? `<div style="width:${n / tot * 100}%;background:${color}"></div>` : "";
+  el.innerHTML = `
+    <div class="cards">
+      <div class="card"><div class="k">테이블</div><div class="v">${ir.entities.length}</div></div>
+      <div class="card"><div class="k">컬럼</div><div class="v">${nCols}</div></div>
+      <div class="card"><div class="k">관계</div><div class="v">${ir.relationships.length}</div></div>
+      <div class="card"><div class="k">공통표준용어</div><div class="v">${Math.round(c.common / tot * 100)}<small>%</small></div></div>
+      <div class="card"><div class="k">린트</div><div class="v">${errs}<small> 오류</small> ${warns}<small> 경고</small></div></div>
+      <div class="card clickable" onclick="go('runs/${r.run_id}/valid')"><div class="k">정규형</div><div class="v">${(r.normal_forms || []).filter(f => f.level === "violation").length}<small> 위반</small> ${(r.normal_forms || []).filter(f => f.level !== "violation").length}<small> 확인</small></div></div>
+      <div class="card"><div class="k">샌드박스</div><div class="v" style="font-size:var(--fs-xl);margin-top:6px;">${sb ? (sb.ok ? '<span class="badge b-ok">통과</span>' : '<span class="badge b-err">실패</span>') : '<span class="badge b-dim">미실행</span>'}</div></div>
+    </div>
+    <div class="card">
+      <div class="k">컬럼 표준 적용 (ADR-0005)</div>
+      <div class="stackbar">${seg(c.common, "var(--ok)")}${seg(c.composed, "#d4a72c")}${seg(c.nonstandard, "var(--err)")}${seg(c.added, "#afb8c1")}</div>
+      <div class="legend">
+        <span><i style="background:var(--ok)"></i>공통표준용어 ${c.common}</span>
+        <span><i style="background:#d4a72c"></i>표준단어 조합(DB표준 후보) ${c.composed}</span>
+        <span><i style="background:var(--err)"></i>비표준 ${c.nonstandard}</span>
+        <span><i style="background:#afb8c1"></i>모델링이 추가(대리키·FK) ${c.added}</span>
+      </div>
+    </div>
+    ${sb && !sb.ok ? `<div class="err-box" style="margin-top:var(--sp-3)">${esc(sb.error)}</div>` : ""}`;
+}
+
+let ERD_N = 0;
+async function renderErd(el) {
+  el.innerHTML = `<div class="row" style="margin-bottom:var(--sp-2);"><span class="sub grow">물리 ERD (Mermaid). 속성 옆 문자열은 한글 논리명입니다.</span>
+      <button class="btn sm" id="erdCopy">Mermaid 복사</button><button class="btn sm" id="erdSvg">SVG 저장</button></div>
+    <div class="panel erd-box" id="erdBox"><div class="empty">그리는 중…</div></div>`;
+  $("#erdCopy").onclick = () => navigator.clipboard.writeText(CUR.erd).then(() => toast("복사했습니다"));
+  try {
+    const {svg} = await mermaid.render("erd" + (++ERD_N), CUR.erd);
+    $("#erdBox").innerHTML = svg;
+    $("#erdSvg").onclick = () => download(`nlxpg_run${CUR.run_id}_erd.svg`, svg, "image/svg+xml");
+  } catch (e) { $("#erdBox").innerHTML = `<div class="err-box">${esc(e.message || e)}</div><pre class="code">${esc(CUR.erd)}</pre>`; }
+}
+
+function fkMap(ir) {
+  const m = {};
+  ir.relationships.forEach(r => { if (r.foreign_key) r.foreign_key.columns.forEach((c, i) => m[`${r.foreign_key.table}.${c}`] = `${r.from_entity}.${(r.foreign_key.ref_columns || [])[i] || ""}`); });
+  return m;
+}
+function evLinks(evs) {
+  return (evs || []).map(e => `<span class="ev" data-doc="${esc(e.doc_id)}" data-span="${esc(e.span)}" title="${esc(e.doc_id + ": " + e.span)}">${esc(e.span.split(" | ").pop())}</span>`).join("");
+}
+function bindEv(el) { $$(".ev", el).forEach(x => x.onclick = () => { PENDING_EV = {doc: x.dataset.doc, span: x.dataset.span}; go(`runs/${CUR.run_id}/docs`); }); }
+
+function renderTables(el, ir) {
+  el.innerHTML = `<div class="row" style="margin-bottom:var(--sp-3);">
+      <input type="text" id="tblFilter" class="grow" placeholder="테이블·컬럼 이름으로 거르기">
+      <select id="tblStd"><option value="">모든 컬럼</option><option value="common">공통표준용어</option><option value="composed">표준단어 조합</option><option value="nonstandard">비표준</option><option value="added">추가(대리키·FK)</option></select>
+    </div><div id="tblList"></div>`;
+  const fk = fkMap(ir);
+  const draw = () => {
+    const q = $("#tblFilter").value.trim().toLowerCase(), sf = $("#tblStd").value;
+    const html = ir.entities.map(e => {
+      const cols = e.attributes.filter(a => (!sf || (a.standard || "added") === sf) &&
+        (!q || [e.logical_name, e.physical_name, a.logical_name, a.physical_name].some(s => (s || "").toLowerCase().includes(q))));
+      if (!cols.length) return "";
+      return `<div class="panel entity">
+        <div class="entity-head"><h3>${esc(e.logical_name)}</h3><code>${esc(e.physical_name)}</code>${stdBadge(e.standard, e.standard_notes)}
+          ${e.aliases?.length ? `<span class="sub">별칭: ${esc(e.aliases.join(", "))}</span>` : ""}
+          <span class="sub" style="margin-left:auto;">PK: ${esc(e.primary_key.join(" + "))}</span>
+          ${e.description ? `<div class="desc">${esc(e.description)}</div>` : ""}</div>
+        <div style="overflow:auto;"><table class="grid" style="table-layout:fixed;min-width:1000px;">
+          <colgroup><col style="width:15%"><col style="width:13%"><col style="width:10%"><col style="width:10%"><col style="width:6%"><col style="width:9%"><col style="width:5%"><col><col style="width:13%"></colgroup>
+          <thead><tr><th>논리명</th><th>물리명</th><th>타입</th><th>도메인</th><th>표준</th><th>키</th><th>NULL</th><th>설명</th><th>근거</th></tr></thead><tbody>
+        ${cols.map(a => {
+          const f = fk[`${e.physical_name}.${a.physical_name}`];
+          const keys = [a.is_primary_key && "PK", f && "FK", a.is_unique && !a.is_primary_key && "UK"].filter(Boolean).join(" ");
+          return `<tr><td>${esc(a.logical_name)}${a.standard_notes?.length ? `<div class="note">${esc(a.standard_notes.join("; "))}</div>` : ""}</td>
+            <td><code>${esc(a.physical_name)}</code></td><td class="mono">${esc(a.data_type)}</td><td>${esc(a.domain || "")}</td>
+            <td>${stdBadge(a.standard, a.standard_notes)}</td><td><span class="key">${keys}</span>${f ? `<div class="note">→ ${esc(f)}</div>` : ""}</td>
+            <td>${a.nullable ? "Y" : "N"}</td><td>${esc(a.description)}${a.value_examples?.length ? `<div class="note">예: ${esc(a.value_examples.join(", "))}</div>` : ""}</td>
+            <td>${evLinks(a.evidence)}</td></tr>`;
+        }).join("")}</tbody></table></div></div>`;
+    }).join("");
+    $("#tblList").innerHTML = html || `<div class="empty">조건에 맞는 컬럼이 없습니다.</div>`;
+    bindEv($("#tblList"));
+  };
+  $("#tblFilter").oninput = draw; $("#tblStd").onchange = draw; draw();
+}
+
+function renderRels(el, ir) {
+  el.innerHTML = `<table class="grid"><thead><tr><th>관계</th><th>부모</th><th>자식</th><th>카디널리티</th><th>FK</th><th>설명</th><th>근거</th></tr></thead><tbody>
+    ${ir.relationships.map(r => `<tr><td>${esc(r.name)}</td><td><code>${esc(r.from_entity)}</code></td><td><code>${esc(r.to_entity)}</code></td>
+      <td>${esc(r.cardinality)}</td><td class="mono">${r.foreign_key ? esc(`${r.foreign_key.table}(${r.foreign_key.columns.join(", ")})`) : ""}</td>
+      <td>${esc(r.description)}</td><td>${evLinks(r.evidence)}</td></tr>`).join("")}</tbody></table>`;
+  bindEv(el);
+}
+
+function renderValid(el) {
+  const v = CUR.validation || {}, lint = v.lint || [], sb = v.sandbox, nf = CUR.normal_forms || [];
+  const sorted = [...lint].sort((a, b) => (a.level === "error" ? 0 : 1) - (b.level === "error" ? 0 : 1));
+  const nViol = nf.filter(f => f.level === "violation").length;
+  el.innerHTML = `
+    <div class="card" style="margin-bottom:var(--sp-4);"><div class="k">샌드박스 실행</div>
+      <div style="margin-top:4px;">${sb ? (sb.ok ? `<span class="badge b-ok">통과</span> <span class="sub">${esc(sb.tables_created.join(", "))}</span>` : `<span class="badge b-err">실패</span><div class="err-box" style="margin-top:var(--sp-2)">${esc(sb.error)}</div>`) : `<span class="badge b-dim">실행하지 않음</span>`}</div></div>
+
+    <div class="section-title" style="font-size:var(--fs-xl)">정규형 <span class="sub">위반 ${nViol} · 확인 필요 ${nf.length - nViol}</span></div>
+    <p class="sub" style="margin:-6px 0 var(--sp-3)">데이터 없이 이름(공통표준 단어 분해)·FK 관계·값 예시로 판단합니다. "확인 필요"는 주문 당시 값 보관처럼 의도적인 중복일 수 있습니다.</p>
+    ${nfTable(nf)}
+
+    <div class="section-title" style="font-size:var(--fs-xl)">린트 <span class="sub">${lint.length}</span></div>
+    ${lint.length ? `<table class="grid"><thead><tr><th>수준</th><th>대상</th><th>내용</th></tr></thead><tbody>
+      ${sorted.map(i => `<tr><td><span class="badge ${i.level === "error" ? "b-err" : "b-warn"}">${i.level === "error" ? "오류" : "경고"}</span></td><td><code>${esc(i.target)}</code></td><td>${esc(i.message)}</td></tr>`).join("")}
+    </tbody></table>` : `<div class="empty">린트 지적 사항이 없습니다.</div>`}`;
+}
+
+function renderDdl(el) {
+  el.innerHTML = `<div class="row" style="margin-bottom:var(--sp-2);"><span class="grow"></span>
+    <button class="btn sm" id="ddlCopy">복사</button><a class="btn sm" style="display:inline-flex;align-items:center;" href="/api/runs/${CUR.run_id}/ddl">.sql 내려받기</a>
+    <button class="btn sm" id="ddlCheck">표준 검증</button></div><pre class="code">${esc(CUR.ddl || "")}</pre>`;
+  $("#ddlCopy").onclick = () => navigator.clipboard.writeText(CUR.ddl).then(() => toast("복사했습니다"));
+  $("#ddlCheck").onclick = () => { CHECK_PRESET = {src: "run", run: CUR.run_id}; go("check"); };
+}
+
+let PENDING_EV = null;
+async function renderDocs(el) {
+  const docs = CUR.documents;
+  if (!docs.length) { el.innerHTML = `<div class="empty">문서가 없습니다.</div>`; return; }
+  const want = PENDING_EV?.doc || docs[0].doc_id;
+  el.innerHTML = `<div class="row" style="margin-bottom:var(--sp-2);">
+      <select id="docSel">${docs.map(d => `<option value="${esc(d.doc_id)}" ${d.doc_id === want ? "selected" : ""}>${esc(d.title)}</option>`).join("")}</select>
+      <span class="sub">근거(evidence)를 누르면 해당 절로 이동합니다.</span></div>
+    <div class="panel doc-view" id="docView"><div class="empty">불러오는 중…</div></div>`;
+  const load = async id => {
+    try {
+      const d = await api(`/api/documents/${encodeURIComponent(id)}`);
+      $("#docView").innerHTML = (d.content || "(본문 없음 — 이전 버전에서 기록된 문서)").split("\n").map(line => {
+        const m = line.match(/^(#{1,6})\s+(.*)$/);
+        return m ? `<div class="h h${Math.min(m[1].length, 3)}" data-title="${esc(m[2].trim())}">${esc(m[2])}</div>` : `<div class="l">${esc(line) || "&nbsp;"}</div>`;
+      }).join("");
+      if (PENDING_EV && PENDING_EV.doc === id) {
+        // span: "섹션 경로 | 메모". 짧은 섹션은 합쳐져 경로가 "문서 ~ 문서 > 제6조"처럼 범위가 되므로
+        // 메모(보통 "제3조" 같은 조항·표 이름)를 먼저 찾고, 없으면 경로의 제목들을 뒤에서부터 찾는다.
+        const [path, memo] = PENDING_EV.span.split(" | ");
+        const heads = $$(".h", $("#docView"));
+        const cands = [memo, ...path.split(" ~ ").flatMap(p => p.split(" > ")).reverse()].map(x => (x || "").trim()).filter(Boolean);
+        let h = null;
+        for (const c of cands) { h = heads.find(x => x.dataset.title === c) || heads.find(x => x.dataset.title.startsWith(c)); if (h) break; }
+        if (!h && memo) { // 제목이 아니라 본문 인용이면 본문 줄에서 찾는다
+          h = $$(".l", $("#docView")).find(x => x.textContent.includes(memo.trim()));
+        }
+        if (h) { h.scrollIntoView({block: "start"}); h.classList.add("flash"); setTimeout(() => h.classList.remove("flash"), 2500); }
+        PENDING_EV = null;
+      }
+    } catch (e) { $("#docView").innerHTML = `<div class="err-box">${esc(e.message)}</div>`; }
+  };
+  $("#docSel").onchange = e => load(e.target.value);
+  load(want);
+}
+
+const REVIEW = [
+  ["entity_completeness", "엔티티 완전성", "문서의 핵심 개념이 빠짐없이 테이블로 도출되었는가"],
+  ["normalization", "정규화", "중복 속성이나 반복 그룹 없이 3NF를 만족하는가"],
+  ["keys_relationships", "키와 관계", "PK가 적절하고, FK와 카디널리티가 문서 내용과 맞는가"],
+  ["data_types", "타입", "데이터 타입과 길이가 값 예시에 비추어 타당한가"],
+  ["naming", "명명", "표준용어 규칙을 따르고, 논리명과 물리명이 일관된가"],
+  ["evidence", "근거", "각 테이블·컬럼의 evidence가 실제 문서 내용과 일치하는가"],
+];
+async function renderReview(el) {
+  el.innerHTML = `<div class="section-title" style="font-size:var(--fs-xl)">사람 검토 (1~5점)</div>
+    <div class="review-grid">${REVIEW.map(([k, l, d]) => `<div class="card"><b>${l}</b><div class="note" style="min-height:30px;">${d}</div>
+      <div class="score">${[1, 2, 3, 4, 5].map(n => `<label><input type="radio" name="rv_${k}" value="${n}"><span>${n}</span></label>`).join("")}</div></div>`).join("")}</div>
+    <div class="row" style="margin-top:var(--sp-3);align-items:flex-end;">
+      <label class="field">검토자<input type="text" id="rvName" style="width:160px;" value="${esc(ME.display_name)}"></label>
+      <label class="field grow">의견<input type="text" id="rvComment" placeholder="고칠 점, 근거가 틀린 컬럼 등"></label>
+      <button class="btn primary" id="rvSave">저장</button></div>
+    <div style="margin-top:var(--sp-5);" id="rvList"></div>`;
+  $("#rvSave").onclick = async () => {
+    const body = {reviewer: $("#rvName").value.trim(), comment: $("#rvComment").value.trim() || null};
+    if (!body.reviewer) body.reviewer = null;  // 비우면 로그인한 사용자 이름
+    REVIEW.forEach(([k]) => { const x = $(`input[name=rv_${k}]:checked`); body[k] = x ? +x.value : null; });
+    try {
+      await api(`/api/runs/${CUR.run_id}/reviews`, {method: "POST", headers: {"content-type": "application/json"}, body: JSON.stringify(body)});
+      toast("저장했습니다"); renderReview(el); loadRuns();
+    } catch (e) { toast(e.message, true); }
+  };
+  try {
+    const rows = await api(`/api/runs/${CUR.run_id}/reviews`);
+    if (!rows.length) { $("#rvList").innerHTML = `<div class="sub">아직 검토가 없습니다.</div>`; return; }
+    const avg = k => { const v = rows.map(r => r[k]).filter(x => x != null); return v.length ? (v.reduce((a, b) => a + b, 0) / v.length).toFixed(1) : "-"; };
+    $("#rvList").innerHTML = `<table class="grid"><thead><tr><th>검토자</th>${REVIEW.map(([, l]) => `<th class="num">${l}</th>`).join("")}<th>의견</th><th>시각</th></tr></thead><tbody>
+      <tr style="font-weight:600;"><td>평균 (${rows.length}건)</td>${REVIEW.map(([k]) => `<td class="num">${avg(k)}</td>`).join("")}<td></td><td></td></tr>
+      ${rows.map(r => `<tr><td>${esc(r.reviewer)}</td>${REVIEW.map(([k]) => `<td class="num">${r[k] ?? "-"}</td>`).join("")}<td>${esc(r.comment || "")}</td><td>${fmtTime(r.created_at)}</td></tr>`).join("")}</tbody></table>`;
+  } catch (e) { $("#rvList").innerHTML = `<div class="err-box">${esc(e.message)}</div>`; }
+}
+
+// ─────────────────────────────────────────────────────────── 새 설계
+let FILES = [];
+function drawFiles() {
+  $("#fileList").innerHTML = FILES.map((f, i) => `<div><span class="badge b-dim">${esc(f.name.split(".").pop())}</span>${esc(f.name)}<span class="sub">${(f.size / 1024).toFixed(1)} KB</span><a href="#" data-i="${i}">빼기</a></div>`).join("");
+  $$("#fileList a").forEach(a => a.onclick = e => { e.preventDefault(); FILES.splice(+a.dataset.i, 1); drawFiles(); });
+  $("#startBtn").disabled = !FILES.length;
+}
+const drop = $("#drop");
+drop.onclick = () => $("#fileInput").click();
+$("#fileInput").onchange = e => { FILES.push(...e.target.files); e.target.value = ""; drawFiles(); };
+drop.ondragover = e => { e.preventDefault(); drop.classList.add("over"); };
+drop.ondragleave = () => drop.classList.remove("over");
+drop.ondrop = e => { e.preventDefault(); drop.classList.remove("over"); FILES.push(...e.dataTransfer.files); drawFiles(); };
+let CHOICES = null;
+async function loadChoices() {
+  try { CHOICES = await api("/api/llm/choices"); } catch (e) { return; }
+  const cur = $("#runProfile").value;
+  $("#runProfile").innerHTML = CHOICES.profiles.map(p => `<option value="${p.profile_id}" data-ext="${p.external ? 1 : ""}">${esc(p.name)} · ${esc(p.model)}${p.profile_id === CHOICES.default ? " (기본)" : ""}${p.external ? " — 외부 API" : ""}</option>`).join("");
+  $("#runProfile").value = cur && CHOICES.profiles.some(p => String(p.profile_id) === cur) ? cur : (CHOICES.default ?? "");
+  syncRunLlm();
+}
+function syncRunLlm() {
+  const o = $("#runProfile").selectedOptions[0], ext = !!(o && o.dataset.ext);
+  $("#extWarn").style.display = ext ? "block" : "none";
+  if (ext) $("#runInternal").checked = false;  // 외부 API는 사내 문서에 쓸 수 없다
+  $("#runInternal").disabled = ext;
+  $("#internalWarn").style.display = $("#runInternal").checked ? "block" : "none";
+}
+$("#runProfile").onchange = syncRunLlm;
+$("#runInternal").onchange = e => $("#internalWarn").style.display = e.target.checked ? "block" : "none";
+$("#startBtn").onclick = async () => {
+  const fd = new FormData();
+  FILES.forEach(f => fd.append("files", f));
+  fd.append("label", $("#runLabel").value.trim());
+  fd.append("internal", $("#runInternal").checked);
+  fd.append("sandbox", $("#runSandbox").checked);
+  if ($("#runProfile").value) fd.append("profile_id", $("#runProfile").value);
+  fd.append("debug", $("#runDebug").checked);
+  $("#startBtn").disabled = true; $("#startMsg").textContent = "올리는 중…";
+  try {
+    const {run_id} = await api("/api/runs", {method: "POST", body: fd});
+    FILES = []; drawFiles(); $("#runLabel").value = ""; $("#startMsg").textContent = "";
+    go(`runs/${run_id}`);
+  } catch (e) { toast(e.message, true); $("#startMsg").textContent = ""; $("#startBtn").disabled = false; }
+};
+
+// ─────────────────────────────────────────────────────────── 표준 조회
+function showStdTab(tab) {
+  $$("#stdTabs button").forEach(b => b.classList.toggle("active", b.dataset.std === tab));
+  $$("[data-std-pane]").forEach(p => p.style.display = p.dataset.stdPane === tab ? "" : "none");
+  if (tab === "domains") loadDomains();
+}
+$$("#stdTabs button").forEach(b => b.onclick = () => go(b.dataset.std === "lookup" ? "std" : `std/${b.dataset.std}`));
+
+let DOMAINS = null, DOM_GROUP = "";
+async function loadDomains() {
+  if (!DOMAINS) {
+    try { DOMAINS = await api("/api/standards/domains"); }
+    catch (e) { $("#domTable").innerHTML = `<div class="err-box">${esc(e.message)}</div>`; return; }
+    $("#domGroups").innerHTML = [["", `전체 ${DOMAINS.total}`], ...DOMAINS.groups.map(g => [g.group, `${g.group} ${g.domains.length}`])]
+      .map(([g, l]) => `<button data-g="${esc(g)}">${esc(l)}</button>`).join("");
+    $$("#domGroups button").forEach(b => b.onclick = () => { DOM_GROUP = b.dataset.g; renderDomains(); });
+  }
+  renderDomains();
+}
+function renderDomains() {
+  $$("#domGroups button").forEach(b => b.classList.toggle("on", b.dataset.g === DOM_GROUP));
+  const q = $("#domFilter").value.trim().toLowerCase(), onlyAdapted = $("#domAdapted").checked, fw = DOMAINS.format_words;
+  let rows = "", n = 0;
+  for (const g of DOMAINS.groups) {
+    if (DOM_GROUP && g.group !== DOM_GROUP) continue;
+    const byClass = {};
+    g.domains.forEach(d => (byClass[d.klass] ||= []).push(d));
+    let body = "";
+    for (const [klass, ds] of Object.entries(byClass)) {
+      const words = fw[klass] || [];
+      const hit = d => !q || [klass, d.name, d.description, ...words].some(x => (x || "").toLowerCase().includes(q));
+      const shown = ds.filter(d => hit(d) && (!onlyAdapted || d.adapted));
+      if (!shown.length) continue;
+      n += shown.length;
+      const wordsHtml = words.length ? `형식단어 ${words.length}: ${esc(words.slice(0, 12).join(", "))}${words.length > 12 ? " …" : ""}` : "형식단어 없음";
+      body += `<tr class="cls"><td colspan="9"><b>${esc(klass)}</b><span class="fw">${wordsHtml}</span></td></tr>` +
+        shown.map(d => `<tr>
+          <td></td><td><code>${esc(d.name)}</code>${d.default ? ' <span title="길이를 모를 때 쓰는 기본 도메인">★</span>' : ""}<div class="note">${esc(d.description)}</div></td>
+          <td class="mono">${esc(d.data_type)}${d.length ? `(${d.length}${d.scale ? "," + d.scale : ""})` : ""}</td>
+          <td class="mono ${d.adapted ? "adapted" : ""}" title="${d.adapted ? "ADR-0005: 공통표준 " + esc(d.original_type) + " 대신 사용" : ""}">${esc(d.pg_type)}</td>
+          <td class="mono">${esc(d.storage_format)}</td><td class="mono">${esc(d.display_format)}</td>
+          <td class="sub">${esc(d.allowed)}</td><td>${esc(d.unit)}</td>
+          <td class="num">${d.term_count ? `<a class="cnt" data-dom="${esc(d.name)}">${d.term_count.toLocaleString()}</a>` : `<span class="sub">0</span>`}</td></tr>`).join("");
+    }
+    if (body) rows += `<tr class="grp"><td colspan="9">${esc(g.group)}</td></tr>` + body;
+  }
+  $("#domTable").innerHTML = rows ? `<div class="panel" style="overflow:auto;"><table class="grid" style="min-width:1100px;">
+      <colgroup><col style="width:24px"><col style="width:24%"><col style="width:110px"><col style="width:120px"><col style="width:13%"><col style="width:13%"><col><col style="width:70px"><col style="width:70px"></colgroup>
+      <thead><tr><th></th><th>도메인명</th><th>공통표준 타입</th><th>nlxpg 타입</th><th>저장형식</th><th>표현형식</th><th>허용값</th><th>단위</th><th class="num">용어 수</th></tr></thead>
+      <tbody>${rows}</tbody></table></div><div class="sub" style="margin-top:var(--sp-2)">${n}개 표시 · 공통표준 ${esc(DOMAINS.version)}판 · 용어 수를 누르면 그 도메인을 쓰는 표준용어가 펼쳐집니다.</div>`
+    : `<div class="panel empty">조건에 맞는 도메인이 없습니다.</div>`;
+  $$("#domTable a.cnt").forEach(a => a.onclick = () => toggleDomainTerms(a));
+}
+async function toggleDomainTerms(a) {
+  const tr = a.closest("tr"), next = tr.nextElementSibling;
+  if (next && next.classList.contains("terms")) { next.remove(); return; }
+  const row = document.createElement("tr"); row.className = "terms";
+  row.innerHTML = `<td colspan="9" class="sub">불러오는 중…</td>`; tr.after(row);
+  try {
+    const {total, items} = await api(`/api/standards/domains/${encodeURIComponent(a.dataset.dom)}/terms?limit=60`);
+    row.innerHTML = `<td colspan="9"><div class="sub" style="margin-bottom:4px;">${esc(a.dataset.dom)} 사용 표준용어 ${total.toLocaleString()}개${total > items.length ? ` 중 ${items.length}개` : ""}</div>
+      ${items.map(t => `<span class="chip" style="margin:2px;" title="${esc(t.description)}">${esc(t.name)} <code>${esc(t.abbr.toLowerCase())}</code></span>`).join("")}</td>`;
+  } catch (e) { row.innerHTML = `<td colspan="9"><div class="err-box">${esc(e.message)}</div></td>`; }
+}
+$("#domFilter").oninput = () => DOMAINS && renderDomains();
+$("#domAdapted").onchange = () => DOMAINS && renderDomains();
+
+$("#lookupBtn").onclick = async () => {
+  const names = $("#lookupInput").value.trim();
+  if (!names) return;
+  try {
+    const rows = await api(`/api/standards/lookup?entity=${$("#lookupEntity").checked}&names=${encodeURIComponent(names)}`);
+    $("#lookupResult").innerHTML = `<table class="grid"><thead><tr><th>입력</th><th>표준</th><th>논리명</th><th>물리명</th><th>도메인</th><th>타입</th></tr></thead><tbody>
+      ${rows.map(r => `<tr><td>${esc(r.input)}</td><td>${stdBadge(r.status, r.notes)}</td><td>${esc(r.logical_name)}${r.words.length > 1 ? `<div class="note">${esc(r.words.join(" + "))}</div>` : ""}${r.notes.length ? `<div class="note">${esc(r.notes.join("; "))}</div>` : ""}</td>
+        <td><code>${esc(r.physical_name || "")}</code></td><td>${esc(r.domain || "")}</td><td class="mono">${esc(r.data_type || "")}</td></tr>`).join("")}</tbody></table>`;
+  } catch (e) { toast(e.message, true); }
+};
+$("#lookupInput").onkeydown = e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) $("#lookupBtn").click(); };
+async function doSearch() {
+  const q = $("#searchInput").value.trim(), kind = $("#searchKind").value;
+  if (!q) return;
+  try {
+    const {total, items} = await api(`/api/standards/search?kind=${kind}&q=${encodeURIComponent(q)}`);
+    const cols = {
+      term: [["name", "용어명"], ["abbr", "영문약어"], ["domain", "도메인"], ["description", "설명"]],
+      word: [["name", "단어명"], ["abbr", "영문약어"], ["english", "영문명"], ["is_format", "형식단어"], ["domain_class", "도메인분류"]],
+      domain: [["group", "그룹"], ["klass", "분류"], ["name", "도메인명"], ["data_type", "타입"], ["length", "길이"], ["scale", "소수점"], ["allowed", "허용값"]],
+    }[kind];
+    $("#searchResult").innerHTML = `<div class="sub" style="margin-bottom:var(--sp-2)">${total}건${total > items.length ? ` 중 ${items.length}건 표시` : ""}</div>
+      <table class="grid"><thead><tr>${cols.map(([, l]) => `<th>${l}</th>`).join("")}</tr></thead><tbody>
+      ${items.map(x => `<tr>${cols.map(([k]) => `<td class="${["name", "abbr", "domain"].includes(k) ? "nw" : ""}">${k === "abbr" ? `<code>${esc(x[k])}</code>` : k === "is_format" ? (x[k] ? "Y" : "") : k === "description" ? `<span class="note" style="font-size:var(--fs-sm)">${esc(x[k])}</span>` : esc(x[k] ?? "")}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
+  } catch (e) { toast(e.message, true); }
+}
+$("#searchBtn").onclick = doSearch;
+$("#searchInput").onkeydown = e => { if (e.key === "Enter") doSearch(); };
+
+// ─────────────────────────────────────────────────────────── 표준 검증
+let CHECK_SRC = "ddl", CHECK_PRESET = null, CHECK_REPORT = null, CHECK_FILTER = "";
+function setCheckSrc(src) {
+  CHECK_SRC = src;
+  $$("#checkSrcTabs button").forEach(b => b.classList.toggle("active", b.dataset.src === src));
+  $$("[data-src-pane]").forEach(p => p.style.display = p.dataset.srcPane === src ? "" : "none");
+}
+$$("#checkSrcTabs button").forEach(b => b.onclick = () => setCheckSrc(b.dataset.src));
+$("#checkDdlFileBtn").onclick = () => $("#checkDdlFile").click();
+$("#checkDdlFile").onchange = async e => { const f = e.target.files[0]; if (f) $("#checkDdl").value = await f.text(); e.target.value = ""; };
+
+async function loadCheckRuns() {
+  try {
+    const runs = (RUNS.length ? RUNS : await api("/api/runs")).filter(r => r.table_count);
+    $("#checkRun").innerHTML = runs.map(r => `<option value="${r.run_id}">#${r.run_id} ${esc(r.label || r.documents.join(", "))} (테이블 ${r.table_count})</option>`).join("");
+  } catch { $("#checkRun").innerHTML = `<option value="">시스템 DB에 연결되지 않음</option>`; }
+  if (CHECK_PRESET) { setCheckSrc(CHECK_PRESET.src); $("#checkRun").value = CHECK_PRESET.run; CHECK_PRESET = null; $("#checkBtn").click(); }
+}
+
+$("#checkBtn").onclick = async () => {
+  const body = {source: CHECK_SRC};
+  if (CHECK_SRC === "ddl") body.ddl = $("#checkDdl").value;
+  if (CHECK_SRC === "db") { body.dsn = $("#checkDsn").value.trim(); body.db_schema = $("#checkSchema").value.trim() || "public"; }
+  if (CHECK_SRC === "run") body.run_id = +$("#checkRun").value;
+  $("#checkBtn").disabled = true; $("#checkMsg").textContent = "검증 중…";
+  try {
+    CHECK_REPORT = await api("/api/standards/check", {method: "POST", headers: {"content-type": "application/json"}, body: JSON.stringify(body)});
+    CHECK_FILTER = ""; drawCheck();
+  } catch (e) { $("#checkResult").innerHTML = `<div class="err-box">${esc(e.message)}</div>`; }
+  finally { $("#checkBtn").disabled = false; $("#checkMsg").textContent = ""; }
+};
+
+const VERDICT_CLS = {standard: "b-ok", type_mismatch: "b-warn", name_mismatch: "b-purple", composed: "b-info", nonstandard: "b-err", unknown: "b-dim"};
+const CHECK_HEADER = ["테이블", "컬럼 한글명", "컬럼 영문명", "데이터타입", "판정", "표준용어명", "표준 영문명", "표준도메인", "표준 타입", "비고"];
+function drawCheck() {
+  const r = CHECK_REPORT, L = r.labels, n = r.columns.length;
+  const rows = r.columns.filter(c => !CHECK_FILTER || c.verdict === CHECK_FILTER);
+  $("#checkResult").innerHTML = `
+    <div class="cards">
+      <div class="card clickable ${CHECK_FILTER ? "" : "selected"}" data-f=""><div class="k">표준 준수율 · 컬럼 ${n}</div><div class="v">${(r.compliance * 100).toFixed(1)}<small>%</small></div></div>
+      ${Object.entries(r.summary).map(([k, v]) => `<div class="card clickable ${CHECK_FILTER === k ? "selected" : ""}" data-f="${k}"><div class="k"><span class="badge ${VERDICT_CLS[k]}">${esc(L[k])}</span></div><div class="v">${v}</div></div>`).join("")}
+    </div>
+    ${r.summary.unknown > n / 2 ? `<div class="warnbox" style="margin-bottom:var(--sp-3)">컬럼 ${r.summary.unknown}개(${Math.round(r.summary.unknown / n * 100)}%)를 판정하지 못했습니다. 한글 컬럼명(COMMENT)이 없으면 영문 이름을 공통표준단어의 영문명·관용 영문으로 풀어 추정하는데, 고유 약어(예: CDSCode)처럼 풀 수 없는 이름은 판정할 수 없습니다.</div>` : ""}
+    <div class="panel"><div class="row panel-pad" style="padding-bottom:var(--sp-2);"><span class="sub grow">공통표준 ${esc(r.standards_version)}판 · 날짜 도메인은 ADR-0005 타입(date/timestamp)과 공통표준 원형(char) 모두 준수로 봅니다.</span>
+      <button class="btn sm" id="checkCsv">매핑정보 CSV</button></div>
+    <div style="overflow:auto;max-height:calc(100vh - 330px);"><table class="grid"><thead><tr><th>테이블</th><th>한글명</th><th>영문명</th><th>타입</th><th>판정</th><th>표준용어</th><th>표준 영문명</th><th>표준도메인</th><th>표준 타입</th><th>비고</th></tr></thead><tbody>
+    ${rows.map(c => `<tr><td><code>${esc(c.table)}</code></td><td>${esc(c.logical_name || "")}</td><td><code>${esc(c.column)}</code></td><td class="mono">${esc(c.data_type)}</td>
+      <td><span class="badge ${VERDICT_CLS[c.verdict]}">${esc(L[c.verdict])}</span>${c.matched_by === "physical" ? `<div class="note">영문명으로 찾음</div>` : c.matched_by === "english" ? `<div class="note" title="공통표준단어 영문명·관용 영문으로 추정. 뜻이 다를 수 있으니 확인 필요">영문명으로 추정</div>` : ""}</td>
+      <td>${esc(c.std_term || "")}</td><td><code>${esc(c.std_physical || "")}</code></td><td>${esc(c.std_domain || "")}</td><td class="mono">${esc(c.std_type || "")}</td>
+      <td><span class="note" style="font-size:var(--fs-sm)">${esc(c.notes.join("; "))}</span></td></tr>`).join("")}
+    </tbody></table></div></div>`;
+  $$("#checkResult .card.clickable").forEach(el => el.onclick = () => { CHECK_FILTER = el.dataset.f; drawCheck(); });
+  $("#checkCsv").onclick = () => download(`nlxpg_standards_check.csv`, csv([CHECK_HEADER, ...r.columns.map(c => [c.table, c.logical_name, c.column, c.data_type, L[c.verdict], c.std_term, c.std_physical, c.std_domain, c.std_type, c.notes.join("; ")])]), "text/csv");
+}
+
+// ─────────────────────────────────────────────────────────── 시작
+mermaid.initialize({startOnLoad: false, theme: "neutral", securityLevel: "strict", er: {useMaxWidth: false}});
+startApp();
+</script>
+</body>
+</html>
